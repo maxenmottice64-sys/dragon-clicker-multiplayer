@@ -8,7 +8,7 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 // Helper to calculate skin boost multiplier
 function getSkinBoost(skinLevel) {
-  // Level 1 = 5% (0.05), Level 52 = 515% (5.15)
+  // Level 1 = 10% boost (1.10), Level 52 = 520% boost (6.20)
   return 1 + (skinLevel * 0.10); 
 }
 
@@ -27,11 +27,16 @@ let globalGameState = {
 
 app.use(express.static('public'));
 
-// Helper function to handle a full economy wipe
+// Helper function to handle a COMPLETE wipe (Stats, Tickets, & Skins)
 function resetAllStats() {
   globalGameState.cash = 0;
   globalGameState.cpc = 1;
   globalGameState.cps = 0;
+  globalGameState.goldenTickets = 0;
+  globalGameState.totalAscensions = 0;
+  globalGameState.activeSkinIcon = '🐉';
+  globalGameState.activeSkinName = 'Crimson Drake';
+  globalGameState.activeSkinLevel = 1;
   globalGameState.cpcUpgradesCount = {};
   globalGameState.cpsUpgradesCount = {};
 }
@@ -69,7 +74,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Equipping skin with boost properties
+  // Equipping skin
   socket.on('equipSkin', (skinData) => {
     globalGameState.activeSkinIcon = skinData.icon;
     globalGameState.activeSkinName = skinData.name;
@@ -83,12 +88,19 @@ io.on('connection', (socket) => {
     if (earnedTickets > 0) {
       globalGameState.goldenTickets += earnedTickets;
       globalGameState.totalAscensions += 1;
-      resetAllStats();
+      
+      // Soft reset cash and upgrades during normal ascension
+      globalGameState.cash = 0;
+      globalGameState.cpc = 1;
+      globalGameState.cps = 0;
+      globalGameState.cpcUpgradesCount = {};
+      globalGameState.cpsUpgradesCount = {};
+      
       io.emit('syncState', globalGameState);
     }
   });
 
-  // Admin Broadcast Announcement Event
+  // Admin Broadcast Announcement
   socket.on('adminSendAnnouncement', (message) => {
     if (message && message.trim().length > 0) {
       io.emit('serverAnnouncement', message.trim());
@@ -109,10 +121,10 @@ io.on('connection', (socket) => {
     if (mod.addTickets !== undefined) globalGameState.goldenTickets += mod.addTickets;
     if (mod.setTickets !== undefined) globalGameState.goldenTickets = mod.setTickets;
 
-    // Manual Full Reset via Admin Panel (Cash, CPC, CPS, and Upgrades)
+    // Manual Full Reset via Admin Panel (Cash, CPC, CPS, Golden Tickets, & Skins)
     if (mod.resetAllCash) {
       resetAllStats();
-      io.emit('serverNotification', 'An Admin has reset all global stats (Cash, CPC, & CPS) back to base values!');
+      io.emit('serverNotification', '🚨 An Admin has completely reset all global stats, Golden Tickets, and unlocked skins back to default!');
     }
 
     io.emit('syncState', globalGameState);
@@ -130,11 +142,11 @@ setInterval(() => {
   }
 }, 1000);
 
-// AUTOMATIC FULL STATS RESET EVERY 30 MINUTES (1,800,000 ms)
+// AUTOMATIC FULL STATS, TICKETS & SKINS RESET EVERY 30 MINUTES (1,800,000 ms)
 setInterval(() => {
   resetAllStats();
   io.emit('syncState', globalGameState);
-  io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, CPC, and CPS stats have been cleared!');
+  io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, upgrades, Golden Tickets, and skins have been wiped!');
 }, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
