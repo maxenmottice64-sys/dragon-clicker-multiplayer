@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multiplayer Dragon Clicker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800;900&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      background: #0f0a1c;
+      color: #f3f4f6;
+      overflow-x: hidden;
+    }
+
+    .font-cinzel { font-family: 'Cinzel', serif; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 10, 28, 0.6); }
+    ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #6d28d9; }
+
+    @keyframes pulse-glow {
+      0%, 100% { filter: drop-shadow(0 0 15px rgba(234, 179, 8, 0.4)); transform: scale(1); }
+      50% { filter: drop-shadow(0 0 30px rgba(239, 68, 68, 0.7)); transform: scale(1.02); }
+    }
+    .dragon-glow { animation: pulse-glow 3s infinite ease-in-out; }
+
+    @keyframes float-up {
+      0% { opacity: 1; transform: translateY(0) scale(1); }
+      100% { opacity: 0; transform: translateY(-90px) scale(1.25); }
+    }
+    .floating-text {
+      position: absolute; pointer-events: none; animation: float-up 0.9s ease-out forwards;
+      font-weight: 900; text-shadow: 0 3px 10px rgba(0,0,0,0.9); z-index: 30;
+    }
+
+    .dragon-active:active { transform: scale(0.92) !important; }
+
+    .glass-panel {
+      background: rgba(26, 19, 48, 0.75);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(139, 92, 246, 0.2);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white">
+
+  <div id="announcement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
+    <div class="glass-panel p-8 rounded-3xl border-2 border-amber-500/60 max-w-lg w-full text-center space-y-6 shadow-2xl relative">
+      <div class="inline-block p-4 bg-gradient-to-tr from-amber-500 to-red-600 rounded-2xl text-white text-4xl shadow-lg">
+        <i class="fa-solid fa-bullhorn"></i>
+      </div>
+      <div>
+        <h3 class="text-3xl font-black font-cinzel text-amber-300">ADMIN ANNOUNCEMENT</h3>
+        <p class="text-xs text-purple-300 mt-1 uppercase tracking-widest">Broadcast to All Players</p>
+      </div>
+      <div id="announcement-text" class="p-4 bg-purple-950/80 rounded-2xl border border-purple-500/30 text-lg font-bold text-amber-100 max-h-48 overflow-y-auto">
+        Message goes here...
+      </div>
+      <button onclick="closeAnnouncementModal()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-extrabold rounded-xl transition shadow-xl">
+        Dismiss Announcement
+      </button>
+    </div>
+  </div>
+
+  <div id="anticheat-screen" class="fixed inset-0 bg-red-700/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-6 text-center space-y-6 hidden">
+    <div class="p-6 bg-black/40 rounded-full border-4 border-white/30 shadow-2xl animate-bounce">
+      <i class="fa-solid fa-triangle-exclamation text-7xl text-yellow-300"></i>
+    </div>
+    <div class="space-y-2">
+      <h1 class="text-6xl md:text-8xl font-black font-cinzel text-white tracking-widest drop-shadow-lg">DON'T CHEAT!</h1>
+      <p class="text-xl md:text-2xl font-bold text-red-100 max-w-lg mx-auto">Autoclicker Detected! (Exceeded 30 CPS)</p>
+    </div>
+    <button onclick="location.reload()" class="px-8 py-4 bg-white text-red-700 hover:bg-red-100 font-extrabold text-lg rounded-2xl shadow-2xl transition transform hover:scale-105">
+      Restart Game
+    </button>
+  </div>
+
+  <header class="w-full glass-panel px-6 py-4 flex flex-wrap justify-between items-center shadow-2xl z-30 border-b border-purple-500/20">
+    <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('game')">
+      <div class="p-2 bg-gradient-to-tr from-amber-500 to-red-600 rounded-xl shadow-lg">
+        <i class="fa-solid fa-dragon text-2xl text-white"></i>
+      </div>
+      <div>
+        <h1 class="text-2xl font-black font-cinzel tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-orange-400 to-red-500">
+          DRAGON CLICKER
+        </h1>
+        <p class="text-xs text-purple-300 font-semibold">Ascension Realm</p>
+      </div>
+    </div>
+
+    <nav class="flex space-x-2 bg-purple-950/60 p-1.5 rounded-2xl border border-purple-500/30">
+      <button onclick="switchTab('game')" id="tab-game" class="px-4 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-lg flex items-center space-x-2">
+        <i class="fa-solid fa-hand-pointer"></i><span>Clicker</span>
+      </button>
+      <button onclick="switchTab('shop')" id="tab-shop" class="px-4 py-2 rounded-xl text-sm font-bold text-purple-300 hover:text-white hover:bg-purple-800/40 flex items-center space-x-2">
+        <i class="fa-solid fa-store"></i><span>Shop</span>
+      </button>
+      <button onclick="switchTab('ascension')" id="tab-ascension" class="px-4 py-2 rounded-xl text-sm font-bold text-amber-300 hover:text-amber-100 hover:bg-amber-500/20 flex items-center space-x-2">
+        <i class="fa-solid fa-hat-wizard"></i><span>Ascension</span>
+      </button>
+      <button onclick="openAdminModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/20 flex items-center space-x-1">
+        <i class="fa-solid fa-user-shield"></i><span>Admin</span>
+      </button>
+    </nav>
+  </header>
+
+  <main class="flex-grow flex items-center justify-center p-4 md:p-8 relative">
+
+    <section id="screen-game" class="w-full max-w-4xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-center z-10">
+      <div class="md:col-span-5 glass-panel p-6 rounded-3xl border border-purple-500/30 shadow-xl space-y-6">
+        <div>
+          <span class="text-xs font-bold uppercase tracking-widest text-purple-400">Current Balance</span>
+          <div id="game-cash" class="text-4xl font-black text-amber-400 font-mono tracking-tight mt-1">$0</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 pt-2 border-t border-purple-500/20">
+          <div class="bg-purple-950/50 p-4 rounded-2xl border border-purple-500/20">
+            <span class="text-xs text-purple-300 block mb-1">Per Click (CPC)</span>
+            <span id="game-cpc" class="text-xl font-bold text-green-400 font-mono">$1</span>
+          </div>
+          <div class="bg-purple-950/50 p-4 rounded-2xl border border-purple-500/20">
+            <span class="text-xs text-purple-300 block mb-1">Per Second (CPS)</span>
+            <span id="game-cps" class="text-xl font-bold text-cyan-400 font-mono">$0</span>
+          </div>
+        </div>
+
+        <div class="bg-amber-950/30 p-4 rounded-2xl border border-amber-500/20 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-amber-300 font-semibold">Active Skin (<span id="equipped-skin-boost" class="text-green-400 font-bold">+10% Boost</span>)</div>
+            <div id="equipped-skin-name" class="text-sm font-bold text-amber-100">Crimson Drake</div>
+          </div>
+          <div id="equipped-skin-icon" class="text-3xl">🐉</div>
+        </div>
+
+        <div class="bg-purple-950/30 p-4 rounded-2xl border border-purple-500/20 flex items-center justify-between">
+          <div>
+            <div class="text-xs text-purple-300 font-semibold">Golden Tickets (Boost: +<span id="ticket-boost-pct">0</span>%)</div>
+            <div id="game-tickets" class="text-lg font-mono font-black text-yellow-300">🎫 0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="md:col-span-7 flex flex-col items-center justify-center relative min-h-[360px]">
+        <div id="click-area" class="relative group cursor-pointer flex flex-col items-center justify-center">
+          <div class="absolute w-72 h-72 bg-gradient-to-r from-amber-500/20 to-red-600/30 rounded-full blur-3xl group-hover:scale-110 transition duration-500"></div>
+          <div id="dragon-button" class="dragon-glow dragon-active relative z-10 transition-transform duration-75 text-9xl md:text-[11rem] select-none filter drop-shadow-2xl">
+            🐉
+          </div>
+          <p class="mt-8 text-sm font-semibold text-purple-300/80 bg-purple-950/60 px-4 py-1.5 rounded-full border border-purple-500/20 z-10">
+            Click or Press <kbd class="bg-purple-800 text-white px-2 py-0.5 rounded text-xs font-mono">SPACE</kbd> to Slash!
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-shop" class="hidden w-full max-w-5xl z-10">
+      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-purple-500/30 shadow-2xl space-y-6">
+        <div class="flex flex-wrap justify-between items-center pb-4 border-b border-purple-500/20 gap-4">
+          <div>
+            <h2 class="text-3xl font-black font-cinzel text-amber-400">Dragon Bazaar</h2>
+            <p class="text-sm text-purple-300">Upgrade your battle power and automatic gold harvesters (52 Upgrades Each!)</p>
+          </div>
+          <div class="bg-purple-950/80 px-5 py-2.5 rounded-2xl border border-purple-500/30 flex items-center space-x-4">
+            <span class="text-xs text-purple-300">Wallet:</span>
+            <span id="shop-cash" class="text-xl font-mono font-black text-amber-400">$0</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div class="space-y-4">
+            <div class="flex items-center space-x-2 text-lg font-bold text-green-400 border-b border-green-500/30 pb-2">
+              <i class="fa-solid fa-hand-fist"></i>
+              <h3>Click Multipliers (52 Upgrades)</h3>
+            </div>
+            <div id="cpc-upgrades-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-2"></div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="flex items-center space-x-2 text-lg font-bold text-cyan-400 border-b border-cyan-500/30 pb-2">
+              <i class="fa-solid fa-clock"></i>
+              <h3>Passive Income (52 Upgrades)</h3>
+            </div>
+            <div id="cps-upgrades-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-2"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-ascension" class="hidden w-full max-w-5xl z-10">
+      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-amber-500/30 shadow-2xl space-y-8">
+        <div class="flex flex-wrap justify-between items-center pb-4 border-b border-amber-500/20 gap-4">
+          <div>
+            <h2 class="text-3xl font-black font-cinzel text-amber-300 flex items-center space-x-3">
+              <i class="fa-solid fa-hat-wizard text-amber-400"></i>
+              <span>Ascension & Dragon Skins</span>
+            </h2>
+            <p class="text-sm text-amber-200/70">Reborn with Golden Tickets to unlock celestial powers and legendary skins (52 Skins!)</p>
+          </div>
+          <div class="bg-amber-950/60 px-5 py-2.5 rounded-2xl border border-amber-500/40 flex items-center space-x-3">
+            <span class="text-xs text-amber-300">Your Tickets:</span>
+            <span id="ascension-tickets" class="text-xl font-mono font-black text-yellow-300">🎫 0</span>
+          </div>
+        </div>
+
+        <div class="bg-gradient-to-r from-amber-950/60 via-purple-950/60 to-amber-950/60 p-6 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div class="space-y-2 text-center md:text-left">
+            <h3 class="text-xl font-bold text-amber-200">Perform Dragon Ascension</h3>
+            <p class="text-sm text-purple-200">
+              Reset your Cash and Shop Upgrades in exchange for <strong class="text-yellow-300">Golden Tickets</strong>.
+              <br><span class="text-xs text-amber-400/80">Each Golden Ticket permanently boosts ALL Cash earnings by +10%!</span>
+            </p>
+            <div class="text-sm font-semibold text-amber-300 pt-1">
+              Gain on Ascension: <span id="pending-tickets" class="font-mono text-lg font-black text-yellow-300">+0 🎫</span>
+            </div>
+          </div>
+          <button onclick="performAscension()" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-lg rounded-2xl shadow-xl transition transform hover:scale-105 whitespace-nowrap">
+            <i class="fa-solid fa-fire-flame-curved mr-2"></i>ASCEND NOW
+          </button>
+        </div>
+
+        <div class="space-y-4">
+          <h3 class="text-xl font-bold text-amber-300 border-b border-amber-500/20 pb-2">
+            Dragon Skins Gallery (52 Skins with Multiplier Boosts!)
+          </h3>
+          <div id="skins-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[450px] overflow-y-auto pr-2"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="admin-passcode-view" class="glass-panel p-8 rounded-3xl border border-red-500/40 max-w-sm w-full space-y-6 text-center relative">
+      <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-purple-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
+      <div class="inline-block p-4 bg-red-950/80 border border-red-500/30 rounded-2xl text-red-400 text-3xl">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <div>
+        <h3 class="text-2xl font-black font-cinzel text-red-400">Admin Security</h3>
+        <p class="text-xs text-purple-300 mt-1">Enter passcode to unlock admin cheats</p>
+      </div>
+      <input type="password" id="admin-passcode-input" placeholder="Passcode" maxlength="8" class="w-full bg-slate-900 border border-red-500/40 rounded-xl px-4 py-3 text-center text-2xl tracking-widest font-mono text-white focus:outline-none">
+      <button onclick="verifyAdminPasscode()" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition">Unlock Panel</button>
+    </div>
+
+    <div id="admin-tools-view" class="glass-panel p-6 md:p-8 rounded-3xl border border-red-500/50 max-w-3xl w-full max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl hidden relative">
+      <div class="flex justify-between items-center pb-4 border-b border-red-500/30">
+        <div class="flex items-center space-x-3">
+          <div class="p-2 bg-red-600 rounded-xl text-white"><i class="fa-solid fa-user-shield text-xl"></i></div>
+          <div>
+            <h3 class="text-2xl font-black font-cinzel text-red-400">Admin Control Panel</h3>
+            <p class="text-xs text-green-400 font-mono">Status: Authenticated (Passcode 6021)</p>
+          </div>
+        </div>
+        <button onclick="closeAdminModal()" class="text-purple-400 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="p-4 bg-amber-950/40 border border-amber-500/40 rounded-2xl space-y-3">
+        <h4 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-bullhorn"></i>
+          <span>Send Global Announcement</span>
+        </h4>
+        <p class="text-xs text-purple-300">Type a message to pop up on every connected player's screen in real time.</p>
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          <input type="text" id="admin-announcement-input" placeholder="Type announcement here..." class="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-amber-200 focus:outline-none">
+          <button onclick="adminSendAnnouncement()" class="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg whitespace-nowrap transition">
+            Broadcast Message
+          </button>
+        </div>
+      </div>
+
+      <div class="p-4 bg-red-950/40 border border-red-500/40 rounded-2xl space-y-2">
+        <h4 class="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-rotate-left"></i>
+          <span>Global Economy Reset</span>
+        </h4>
+        <p class="text-xs text-purple-300">Wipe all global cash, CPC, and CPS stats across all connected players immediately (Automated timer triggers every 30 mins).</p>
+        <button onclick="adminResetAllCash()" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
+          Reset Everyone's Stats to Default
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <h4 class="text-sm font-bold text-purple-200 uppercase tracking-wider">Quick Preset Generators</h4>
+        
+        <div class="space-y-2">
+          <span class="text-xs text-amber-400 font-semibold">Add Gold Cash:</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="adminAddCash(100000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+100,000</button>
+            <button onclick="adminAddCash(1000000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+1,000,000</button>
+            <button onclick="adminAddCash(10000000000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+10 Billion</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-xs text-cyan-400 font-semibold">Add Passive Income (CPS):</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="adminAddCPS(100000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+100,000 CPS</button>
+            <button onclick="adminAddCPS(1000000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+1,000,000 CPS</button>
+            <button onclick="adminAddCPS(10000000000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+10 Billion CPS</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-xs text-green-400 font-semibold">Add Click Power (CPC):</span>
+          <div class="grid grid-cols-3 gap-2">
+            <button onclick="adminAddCPC(100000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+100,000 CPC</button>
+            <button onclick="adminAddCPC(1000000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+1,000,000 CPC</button>
+            <button onclick="adminAddCPC(10000000000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+10 Billion CPC</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <span class="text-xs text-yellow-400 font-semibold">Add Golden Tickets:</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="adminAddTickets(1000)" class="py-2 bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 text-xs font-bold rounded-xl">+1,000 Tickets 🎫</button>
+            <button onclick="adminAddTickets(50000)" class="py-2 bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 text-xs font-bold rounded-xl">+50,000 Tickets 🎫</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>
