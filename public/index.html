@@ -51,6 +51,41 @@
 </head>
 <body class="min-h-screen flex flex-col justify-between bg-gradient-to-br from-slate-950 via-purple-950 to-slate-900 text-white">
 
+  <div id="login-modal" class="fixed inset-0 bg-slate-950/95 backdrop-blur-xl z-[120] flex items-center justify-center p-4">
+    <div class="glass-panel p-8 rounded-3xl border-2 border-purple-500/50 max-w-md w-full text-center space-y-6 shadow-2xl">
+      <div class="inline-block p-4 bg-gradient-to-tr from-purple-600 to-amber-500 rounded-2xl text-white text-4xl shadow-lg">
+        <i class="fa-solid fa-user-shield"></i>
+      </div>
+      <div>
+        <h2 class="text-3xl font-black font-cinzel text-amber-300">ACCOUNT LOGIN</h2>
+        <p class="text-xs text-purple-300 mt-1">Enter a unique username to start or resume your game</p>
+      </div>
+      <div class="space-y-3">
+        <input type="text" id="username-input" maxlength="16" placeholder="Choose Username..." class="w-full bg-slate-900/90 border border-purple-500/40 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400">
+        <div id="login-error" class="text-xs font-bold text-red-400 hidden"></div>
+      </div>
+      <button onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base">
+        PLAY NOW
+      </button>
+    </div>
+  </div>
+
+  <div id="banned-modal" class="fixed inset-0 bg-red-950/95 backdrop-blur-xl z-[130] flex flex-col items-center justify-center p-6 text-center space-y-6 hidden">
+    <div class="p-6 bg-black/50 rounded-full border-4 border-red-500 shadow-2xl animate-bounce">
+      <i class="fa-solid fa-ban text-7xl text-red-500"></i>
+    </div>
+    <div class="space-y-3 max-w-lg">
+      <h1 class="text-5xl font-black font-cinzel text-white tracking-wider">ACCOUNT BANNED</h1>
+      <p class="text-sm text-red-200">You have been suspended from accessing Dragon Clicker.</p>
+      <div class="p-4 bg-black/60 rounded-2xl border border-red-500/40 text-amber-300 font-bold text-sm">
+        Reason: <span id="ban-reason-text" class="text-white">Violation of rules.</span>
+      </div>
+    </div>
+    <button onclick="logoutAccount()" class="px-6 py-3 bg-white text-red-900 font-extrabold rounded-xl hover:bg-red-100 transition">
+      Switch Account
+    </button>
+  </div>
+
   <div id="announcement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
     <div class="glass-panel p-8 rounded-3xl border-2 border-amber-500/60 max-w-lg w-full text-center space-y-6 shadow-2xl relative">
       <div class="inline-block p-4 bg-gradient-to-tr from-amber-500 to-red-600 rounded-2xl text-white text-4xl shadow-lg">
@@ -91,7 +126,7 @@
         <h1 class="text-2xl font-black font-cinzel tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-orange-400 to-red-500">
           DRAGON CLICKER
         </h1>
-        <p class="text-xs text-purple-300 font-semibold">Ascension Realm</p>
+        <p class="text-xs text-purple-300 font-semibold">User: <span id="display-user-header" class="text-amber-300 font-bold">---</span></p>
       </div>
     </div>
 
@@ -107,6 +142,9 @@
       </button>
       <button onclick="openAdminModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/20 flex items-center space-x-1">
         <i class="fa-solid fa-user-shield"></i><span>Admin</span>
+      </button>
+      <button onclick="logoutAccount()" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white flex items-center space-x-1">
+        <i class="fa-solid fa-right-from-bracket"></i>
       </button>
     </nav>
   </header>
@@ -262,6 +300,20 @@
         <button onclick="closeAdminModal()" class="text-purple-400 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
+      <div class="p-4 bg-red-950/50 border border-red-500/50 rounded-2xl space-y-3">
+        <h4 class="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-gavel"></i>
+          <span>Ban Account By Username</span>
+        </h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input type="text" id="admin-ban-username" placeholder="Username to ban..." class="bg-slate-900 border border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none">
+          <input type="text" id="admin-ban-reason" placeholder="Reason for ban..." class="bg-slate-900 border border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none">
+        </div>
+        <button onclick="adminBanUser()" class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
+          Execute Ban
+        </button>
+      </div>
+
       <div class="p-4 bg-amber-950/40 border border-amber-500/40 rounded-2xl space-y-3">
         <h4 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
           <i class="fa-solid fa-bullhorn"></i>
@@ -281,9 +333,9 @@
           <i class="fa-solid fa-rotate-left"></i>
           <span>Global Economy Reset</span>
         </h4>
-        <p class="text-xs text-purple-300">Wipe all global cash, CPC, and CPS stats across all connected players immediately (Automated timer triggers every 30 mins).</p>
+        <p class="text-xs text-purple-300">Wipe all user cash, upgrades, tickets, and skins across all accounts.</p>
         <button onclick="adminResetAllCash()" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
-          Reset Everyone's Stats to Default
+          Reset All User Accounts to Default
         </button>
       </div>
 
