@@ -6,8 +6,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// Storage for user accounts and banned users
-// users[username] = { cash, cpc, cps, goldenTickets, totalAscensions, activeSkinIcon, activeSkinName, activeSkinLevel, cpcUpgradesCount, cpsUpgradesCount }
 let users = {};
 let bannedUsers = {}; // bannedUsers[username] = reason
 
@@ -30,17 +28,35 @@ function getDefaultStats() {
   };
 }
 
-// Reset stats for all accounts
 function resetAllUserAccounts() {
   for (let username in users) {
     users[username] = getDefaultStats();
   }
 }
 
+// Generate Top 10 Leaderboard
+function getLeaderboardData() {
+  const userList = Object.keys(users).map(key => ({
+    username: users[key].displayName || key,
+    cash: users[key].cash || 0,
+    goldenTickets: users[key].goldenTickets || 0
+  }));
+
+  userList.sort((a, b) => b.cash - a.cash);
+  return userList.slice(0, 10);
+}
+
+function broadcastLeaderboard() {
+  io.emit('updateLeaderboard', getLeaderboardData());
+}
+
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
   let currentUsername = null;
+
+  // Send initial leaderboard on connect
+  socket.emit('updateLeaderboard', getLeaderboardData());
 
   // Login or Register attempt
   socket.on('userLogin', (data) => {
@@ -57,13 +73,13 @@ io.on('connection', (socket) => {
       return socket.emit('userBanned', { reason: bannedUsers[usernameKey] });
     }
 
-    // Check if another active connection is using this username
+    // Check duplicate active sessions
     const isAlreadyConnected = Array.from(io.sockets.sockets.values()).some(s => s.usernameKey === usernameKey && s.id !== socket.id);
     if (isAlreadyConnected) {
       return socket.emit('loginError', 'This username is currently active in another session!');
     }
 
-    // Assign account (create new if doesn't exist)
+    // Register / Load account
     if (!users[usernameKey]) {
       users[usernameKey] = getDefaultStats();
       users[usernameKey].displayName = rawUsername;
@@ -76,6 +92,8 @@ io.on('connection', (socket) => {
       username: users[usernameKey].displayName || rawUsername,
       state: users[usernameKey]
     });
+
+    broadcastLeaderboard();
   });
 
   // Player click
@@ -90,6 +108,7 @@ io.on('connection', (socket) => {
     user.cash += earned;
 
     socket.emit('syncState', user);
+    broadcastLeaderboard();
   });
 
   // Buying an upgrade
@@ -108,6 +127,7 @@ io.on('connection', (socket) => {
         user.cpsUpgradesCount[id] = (user.cpsUpgradesCount[id] || 0) + 1;
       }
       socket.emit('syncState', user);
+      broadcastLeaderboard();
     }
   });
 
@@ -139,7 +159,20 @@ io.on('connection', (socket) => {
       user.cpsUpgradesCount = {};
       
       socket.emit('syncState', user);
+      broadcastLeaderboard();
     }
+  });
+
+  // Anti-cheat alert handler
+  socket.on('cheaterDetected', (data) => {
+    if (!currentUsername) return;
+    const displayName = users[currentUsername] ? users[currentUsername].displayName : currentUsername;
+    
+    // Broadcast cheater alert to all connected sockets
+    io.emit('adminCheaterAlert', {
+      username: displayName,
+      cps: data.cps || 30
+    });
   });
 
   // Admin Broadcast Announcement
@@ -158,7 +191,6 @@ io.on('connection', (socket) => {
 
     bannedUsers[targetUsername] = reason;
 
-    // Disconnect active socket if currently online
     for (let [id, s] of io.sockets.sockets) {
       if (s.usernameKey === targetUsername) {
         s.emit('userBanned', { reason: reason });
@@ -167,6 +199,7 @@ io.on('connection', (socket) => {
     }
 
     io.emit('serverNotification', `🔨 Player "${data.targetUsername}" has been banned for: ${reason}`);
+    broadcastLeaderboard();
   });
 
   // Admin modifications
@@ -179,7 +212,6 @@ io.on('connection', (socket) => {
     if (mod.addCPC !== undefined) user.cpc += mod.addCPC;
     if (mod.addTickets !== undefined) user.goldenTickets += mod.addTickets;
 
-    // Global Reset Trigger
     if (mod.resetAllCash) {
       resetAllUserAccounts();
       io.emit('serverNotification', '🚨 An Admin has completely reset all user stats, Golden Tickets, and unlocked skins!');
@@ -191,10 +223,12 @@ io.on('connection', (socket) => {
     } else {
       socket.emit('syncState', user);
     }
+
+    broadcastLeaderboard();
   });
 });
 
-// Passive Income Ticker (1 second interval)
+// Passive Income Ticker (1 sec)
 setInterval(() => {
   for (let [id, socket] of io.sockets.sockets) {
     if (socket.usernameKey && users[socket.usernameKey]) {
@@ -209,7 +243,7 @@ setInterval(() => {
   }
 }, 1000);
 
-// AUTOMATIC FULL STATS RESET EVERY 30 MINUTES
+// AUTOMATIC FULL RESET EVERY 30 MINUTES
 setInterval(() => {
   resetAllUserAccounts();
   io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, upgrades, Golden Tickets, and skins have been wiped across all accounts!');
@@ -218,6 +252,7 @@ setInterval(() => {
       socket.emit('syncState', users[socket.usernameKey]);
     }
   }
+  broadcastLeaderboard();
 }, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
