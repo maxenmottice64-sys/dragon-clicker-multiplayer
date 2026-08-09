@@ -1,5 +1,7 @@
 const socket = io();
 
+let currentAccountUsername = localStorage.getItem('dragon_clicker_username') || '';
+
 // Anti-cheat variables
 let clickTimestamps = [];
 let isAntiCheatTriggered = false;
@@ -47,10 +49,10 @@ const CPS_UPGRADES = Array.from({ length: 52 }, (_, i) => {
   };
 });
 
-// 52 DRAGON SKINS WITH BOOST MULTIPLIERS
+// 52 DRAGON SKINS
 const DRAGON_SKINS = Array.from({ length: 52 }, (_, i) => {
   const level = i + 1;
-  const skinIcons = ['🐉', '🐲', '🦖', '🐍', '🐊', '🦎', '🔥', '⚡', '❄️', '✨', '👑', '☠️'];
+  const skinIcons = ['🐉', '🐲', '🦖', '🐍', '🐊', '蜥', '🔥', '⚡', '❄️', '✨', '👑', '☠️'];
   const boostPercent = level * 10;
   return {
     id: `skin_${level}`,
@@ -62,6 +64,23 @@ const DRAGON_SKINS = Array.from({ length: 52 }, (_, i) => {
   };
 });
 
+// AUTO LOGIN IF USERNAME IS SAVED
+if (currentAccountUsername) {
+  socket.emit('userLogin', { username: currentAccountUsername });
+}
+
+function submitLogin() {
+  const input = document.getElementById('username-input').value.trim();
+  if (input) {
+    socket.emit('userLogin', { username: input });
+  }
+}
+
+function logoutAccount() {
+  localStorage.removeItem('dragon_clicker_username');
+  location.reload();
+}
+
 function renderDynamicContent() {
   const cpcContainer = document.getElementById('cpc-upgrades-list');
   const cpsContainer = document.getElementById('cps-upgrades-list');
@@ -69,7 +88,7 @@ function renderDynamicContent() {
 
   cpcContainer.innerHTML = '';
   CPC_UPGRADES.forEach(item => {
-    const owned = latestState.cpcUpgradesCount[item.id] || 0;
+    const owned = (latestState.cpcUpgradesCount && latestState.cpcUpgradesCount[item.id]) || 0;
     const currentCost = Math.floor(item.baseCost * Math.pow(1.15, owned));
     const btn = document.createElement('div');
     btn.className = 'glass-panel p-3 rounded-xl flex items-center justify-between border border-purple-500/20';
@@ -90,7 +109,7 @@ function renderDynamicContent() {
 
   cpsContainer.innerHTML = '';
   CPS_UPGRADES.forEach(item => {
-    const owned = latestState.cpsUpgradesCount[item.id] || 0;
+    const owned = (latestState.cpsUpgradesCount && latestState.cpsUpgradesCount[item.id]) || 0;
     const currentCost = Math.floor(item.baseCost * Math.pow(1.15, owned));
     const btn = document.createElement('div');
     btn.className = 'glass-panel p-3 rounded-xl flex items-center justify-between border border-purple-500/20';
@@ -111,7 +130,7 @@ function renderDynamicContent() {
 
   skinsContainer.innerHTML = '';
   DRAGON_SKINS.forEach(skin => {
-    const isUnlocked = latestState.goldenTickets >= skin.ticketReq;
+    const isUnlocked = (latestState.goldenTickets || 0) >= skin.ticketReq;
     const isEquipped = latestState.activeSkinName === skin.name;
 
     const btn = document.createElement('div');
@@ -136,7 +155,6 @@ function triggerClick(e) {
   if (checkAntiCheat()) return;
   socket.emit('playerClick');
   
-  // Calculate true earned value per click based on active CPC, Golden Tickets, & Skin Boost
   const ticketMultiplier = 1 + ((latestState.goldenTickets || 0) * 0.10);
   const skinMultiplier = 1 + ((latestState.activeSkinLevel || 1) * 0.10);
   const earnedPerClick = (latestState.cpc || 1) * ticketMultiplier * skinMultiplier;
@@ -146,7 +164,6 @@ function triggerClick(e) {
 
 dragonBtn.addEventListener('click', (e) => triggerClick(e));
 
-// Prevent Spacebar trigger when typing in input elements
 window.addEventListener('keydown', (e) => {
   const activeElement = document.activeElement;
   const isTyping = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
@@ -158,8 +175,31 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
-// Socket Events
-socket.on('syncState', (state) => {
+// LOGIN RESPONSE HANDLERS
+socket.on('loginSuccess', (data) => {
+  currentAccountUsername = data.username;
+  localStorage.setItem('dragon_clicker_username', data.username);
+  
+  document.getElementById('login-modal').classList.add('hidden');
+  document.getElementById('display-user-header').textContent = data.username;
+
+  latestState = data.state;
+  updateUI(data.state);
+});
+
+socket.on('loginError', (msg) => {
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = msg;
+  errEl.classList.remove('hidden');
+});
+
+socket.on('userBanned', (data) => {
+  document.getElementById('login-modal').classList.add('hidden');
+  document.getElementById('ban-reason-text').textContent = data.reason || 'Violation of server rules.';
+  document.getElementById('banned-modal').classList.remove('hidden');
+});
+
+function updateUI(state) {
   latestState = state;
   document.getElementById('game-cash').textContent = '$' + Math.floor(state.cash).toLocaleString();
   document.getElementById('shop-cash').textContent = '$' + Math.floor(state.cash).toLocaleString();
@@ -180,18 +220,17 @@ socket.on('syncState', (state) => {
   document.getElementById('pending-tickets').textContent = `+${pending} 🎫`;
 
   renderDynamicContent();
-});
+}
 
-socket.on('clickBroadcast', (data) => {
-  document.getElementById('game-cash').textContent = '$' + Math.floor(data.newCash).toLocaleString();
-  document.getElementById('shop-cash').textContent = '$' + Math.floor(data.newCash).toLocaleString();
+// Socket Events
+socket.on('syncState', (state) => {
+  updateUI(state);
 });
 
 socket.on('serverNotification', (msg) => {
   alert(msg);
 });
 
-// Listen for global admin announcement broadcast
 socket.on('serverAnnouncement', (msg) => {
   document.getElementById('announcement-text').textContent = msg;
   document.getElementById('announcement-modal').classList.remove('hidden');
@@ -244,6 +283,19 @@ function verifyAdminPasscode() {
     document.getElementById('admin-tools-view').classList.remove('hidden');
   } else {
     alert('Incorrect Admin Passcode!');
+  }
+}
+
+function adminBanUser() {
+  const targetUsername = document.getElementById('admin-ban-username').value;
+  const reason = document.getElementById('admin-ban-reason').value;
+
+  if (targetUsername.trim().length > 0) {
+    socket.emit('adminBanUser', { targetUsername, reason });
+    document.getElementById('admin-ban-username').value = '';
+    document.getElementById('admin-ban-reason').value = '';
+  } else {
+    alert('Please enter a username to ban.');
   }
 }
 
