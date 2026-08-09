@@ -6,97 +6,139 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-// Helper to calculate skin boost multiplier
+// Storage for user accounts and banned users
+// users[username] = { cash, cpc, cps, goldenTickets, totalAscensions, activeSkinIcon, activeSkinName, activeSkinLevel, cpcUpgradesCount, cpsUpgradesCount }
+let users = {};
+let bannedUsers = {}; // bannedUsers[username] = reason
+
 function getSkinBoost(skinLevel) {
-  // Level 1 = 10% boost (1.10), Level 52 = 520% boost (6.20)
   return 1 + (skinLevel * 0.10); 
 }
 
-let globalGameState = {
-  cash: 0,
-  cpc: 1,
-  cps: 0,
-  goldenTickets: 0,
-  totalAscensions: 0,
-  activeSkinIcon: '🐉',
-  activeSkinName: 'Crimson Drake',
-  activeSkinLevel: 1,
-  cpcUpgradesCount: {},
-  cpsUpgradesCount: {}
-};
+function getDefaultStats() {
+  return {
+    cash: 0,
+    cpc: 1,
+    cps: 0,
+    goldenTickets: 0,
+    totalAscensions: 0,
+    activeSkinIcon: '🐉',
+    activeSkinName: 'Crimson Drake',
+    activeSkinLevel: 1,
+    cpcUpgradesCount: {},
+    cpsUpgradesCount: {}
+  };
+}
+
+// Reset stats for all accounts
+function resetAllUserAccounts() {
+  for (let username in users) {
+    users[username] = getDefaultStats();
+  }
+}
 
 app.use(express.static('public'));
 
-// Helper function to handle a COMPLETE wipe (Stats, Tickets, & Skins)
-function resetAllStats() {
-  globalGameState.cash = 0;
-  globalGameState.cpc = 1;
-  globalGameState.cps = 0;
-  globalGameState.goldenTickets = 0;
-  globalGameState.totalAscensions = 0;
-  globalGameState.activeSkinIcon = '🐉';
-  globalGameState.activeSkinName = 'Crimson Drake';
-  globalGameState.activeSkinLevel = 1;
-  globalGameState.cpcUpgradesCount = {};
-  globalGameState.cpsUpgradesCount = {};
-}
-
 io.on('connection', (socket) => {
-  socket.emit('syncState', globalGameState);
+  let currentUsername = null;
+
+  // Login or Register attempt
+  socket.on('userLogin', (data) => {
+    const rawUsername = data && data.username ? data.username.trim() : '';
+    
+    if (!rawUsername || rawUsername.length < 3 || rawUsername.length > 16) {
+      return socket.emit('loginError', 'Username must be between 3 and 16 characters!');
+    }
+
+    const usernameKey = rawUsername.toLowerCase();
+
+    // Check if banned
+    if (bannedUsers[usernameKey]) {
+      return socket.emit('userBanned', { reason: bannedUsers[usernameKey] });
+    }
+
+    // Check if another active connection is using this username
+    const isAlreadyConnected = Array.from(io.sockets.sockets.values()).some(s => s.usernameKey === usernameKey && s.id !== socket.id);
+    if (isAlreadyConnected) {
+      return socket.emit('loginError', 'This username is currently active in another session!');
+    }
+
+    // Assign account (create new if doesn't exist)
+    if (!users[usernameKey]) {
+      users[usernameKey] = getDefaultStats();
+      users[usernameKey].displayName = rawUsername;
+    }
+
+    currentUsername = usernameKey;
+    socket.usernameKey = usernameKey;
+
+    socket.emit('loginSuccess', {
+      username: users[usernameKey].displayName || rawUsername,
+      state: users[usernameKey]
+    });
+  });
 
   // Player click
   socket.on('playerClick', () => {
-    const ticketMultiplier = 1 + (globalGameState.goldenTickets * 0.10);
-    const skinMultiplier = getSkinBoost(globalGameState.activeSkinLevel);
-    
-    const earned = globalGameState.cpc * ticketMultiplier * skinMultiplier;
-    globalGameState.cash += earned;
+    if (!currentUsername || !users[currentUsername]) return;
+    const user = users[currentUsername];
 
-    io.emit('clickBroadcast', {
-      newCash: globalGameState.cash,
-      earned: earned
-    });
+    const ticketMultiplier = 1 + (user.goldenTickets * 0.10);
+    const skinMultiplier = getSkinBoost(user.activeSkinLevel);
+    
+    const earned = user.cpc * ticketMultiplier * skinMultiplier;
+    user.cash += earned;
+
+    socket.emit('syncState', user);
   });
 
   // Buying an upgrade
   socket.on('buyUpgrade', (data) => {
+    if (!currentUsername || !users[currentUsername]) return;
+    const user = users[currentUsername];
     const { id, type, cost, addValue } = data;
-    if (globalGameState.cash >= cost) {
-      globalGameState.cash -= cost;
+
+    if (user.cash >= cost) {
+      user.cash -= cost;
       if (type === 'cpc') {
-        globalGameState.cpc += addValue;
-        globalGameState.cpcUpgradesCount[id] = (globalGameState.cpcUpgradesCount[id] || 0) + 1;
+        user.cpc += addValue;
+        user.cpcUpgradesCount[id] = (user.cpcUpgradesCount[id] || 0) + 1;
       } else if (type === 'cps') {
-        globalGameState.cps += addValue;
-        globalGameState.cpsUpgradesCount[id] = (globalGameState.cpsUpgradesCount[id] || 0) + 1;
+        user.cps += addValue;
+        user.cpsUpgradesCount[id] = (user.cpsUpgradesCount[id] || 0) + 1;
       }
-      io.emit('syncState', globalGameState);
+      socket.emit('syncState', user);
     }
   });
 
   // Equipping skin
   socket.on('equipSkin', (skinData) => {
-    globalGameState.activeSkinIcon = skinData.icon;
-    globalGameState.activeSkinName = skinData.name;
-    globalGameState.activeSkinLevel = skinData.level || 1;
-    io.emit('syncState', globalGameState);
+    if (!currentUsername || !users[currentUsername]) return;
+    const user = users[currentUsername];
+
+    user.activeSkinIcon = skinData.icon;
+    user.activeSkinName = skinData.name;
+    user.activeSkinLevel = skinData.level || 1;
+    socket.emit('syncState', user);
   });
 
   // Ascension execution
   socket.on('performAscension', () => {
-    const earnedTickets = Math.floor(Math.sqrt(globalGameState.cash / 100000));
+    if (!currentUsername || !users[currentUsername]) return;
+    const user = users[currentUsername];
+
+    const earnedTickets = Math.floor(Math.sqrt(user.cash / 100000));
     if (earnedTickets > 0) {
-      globalGameState.goldenTickets += earnedTickets;
-      globalGameState.totalAscensions += 1;
+      user.goldenTickets += earnedTickets;
+      user.totalAscensions += 1;
       
-      // Soft reset cash and upgrades during normal ascension
-      globalGameState.cash = 0;
-      globalGameState.cpc = 1;
-      globalGameState.cps = 0;
-      globalGameState.cpcUpgradesCount = {};
-      globalGameState.cpsUpgradesCount = {};
+      user.cash = 0;
+      user.cpc = 1;
+      user.cps = 0;
+      user.cpcUpgradesCount = {};
+      user.cpsUpgradesCount = {};
       
-      io.emit('syncState', globalGameState);
+      socket.emit('syncState', user);
     }
   });
 
@@ -107,46 +149,75 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin modifications
-  socket.on('adminModifyState', (mod) => {
-    if (mod.addCash !== undefined) globalGameState.cash += mod.addCash;
-    if (mod.setCash !== undefined) globalGameState.cash = mod.setCash;
+  // Admin Ban User System
+  socket.on('adminBanUser', (data) => {
+    const targetUsername = data.targetUsername ? data.targetUsername.trim().toLowerCase() : '';
+    const reason = data.reason ? data.reason.trim() : 'Violation of community guidelines.';
 
-    if (mod.addCPS !== undefined) globalGameState.cps += mod.addCPS;
-    if (mod.setCPS !== undefined) globalGameState.cps = mod.setCPS;
+    if (!targetUsername) return;
 
-    if (mod.addCPC !== undefined) globalGameState.cpc += mod.addCPC;
-    if (mod.setCPC !== undefined) globalGameState.cpc = mod.setCPC;
+    bannedUsers[targetUsername] = reason;
 
-    if (mod.addTickets !== undefined) globalGameState.goldenTickets += mod.addTickets;
-    if (mod.setTickets !== undefined) globalGameState.goldenTickets = mod.setTickets;
-
-    // Manual Full Reset via Admin Panel (Cash, CPC, CPS, Golden Tickets, & Skins)
-    if (mod.resetAllCash) {
-      resetAllStats();
-      io.emit('serverNotification', '🚨 An Admin has completely reset all global stats, Golden Tickets, and unlocked skins back to default!');
+    // Disconnect active socket if currently online
+    for (let [id, s] of io.sockets.sockets) {
+      if (s.usernameKey === targetUsername) {
+        s.emit('userBanned', { reason: reason });
+        s.disconnect();
+      }
     }
 
-    io.emit('syncState', globalGameState);
+    io.emit('serverNotification', `🔨 Player "${data.targetUsername}" has been banned for: ${reason}`);
+  });
+
+  // Admin modifications
+  socket.on('adminModifyState', (mod) => {
+    if (!currentUsername || !users[currentUsername]) return;
+    const user = users[currentUsername];
+
+    if (mod.addCash !== undefined) user.cash += mod.addCash;
+    if (mod.addCPS !== undefined) user.cps += mod.addCPS;
+    if (mod.addCPC !== undefined) user.cpc += mod.addCPC;
+    if (mod.addTickets !== undefined) user.goldenTickets += mod.addTickets;
+
+    // Global Reset Trigger
+    if (mod.resetAllCash) {
+      resetAllUserAccounts();
+      io.emit('serverNotification', '🚨 An Admin has completely reset all user stats, Golden Tickets, and unlocked skins!');
+      for (let [id, s] of io.sockets.sockets) {
+        if (s.usernameKey && users[s.usernameKey]) {
+          s.emit('syncState', users[s.usernameKey]);
+        }
+      }
+    } else {
+      socket.emit('syncState', user);
+    }
   });
 });
 
 // Passive Income Ticker (1 second interval)
 setInterval(() => {
-  if (globalGameState.cps > 0) {
-    const ticketMultiplier = 1 + (globalGameState.goldenTickets * 0.10);
-    const skinMultiplier = getSkinBoost(globalGameState.activeSkinLevel);
-    
-    globalGameState.cash += (globalGameState.cps * ticketMultiplier * skinMultiplier);
-    io.emit('syncState', globalGameState);
+  for (let [id, socket] of io.sockets.sockets) {
+    if (socket.usernameKey && users[socket.usernameKey]) {
+      const user = users[socket.usernameKey];
+      if (user.cps > 0) {
+        const ticketMultiplier = 1 + (user.goldenTickets * 0.10);
+        const skinMultiplier = getSkinBoost(user.activeSkinLevel);
+        user.cash += (user.cps * ticketMultiplier * skinMultiplier);
+        socket.emit('syncState', user);
+      }
+    }
   }
 }, 1000);
 
-// AUTOMATIC FULL STATS, TICKETS & SKINS RESET EVERY 30 MINUTES (1,800,000 ms)
+// AUTOMATIC FULL STATS RESET EVERY 30 MINUTES
 setInterval(() => {
-  resetAllStats();
-  io.emit('syncState', globalGameState);
-  io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, upgrades, Golden Tickets, and skins have been wiped!');
+  resetAllUserAccounts();
+  io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, upgrades, Golden Tickets, and skins have been wiped across all accounts!');
+  for (let [id, socket] of io.sockets.sockets) {
+    if (socket.usernameKey && users[socket.usernameKey]) {
+      socket.emit('syncState', users[socket.usernameKey]);
+    }
+  }
 }, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
