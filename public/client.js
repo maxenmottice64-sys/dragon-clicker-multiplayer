@@ -1,6 +1,7 @@
 const socket = io();
 
 let currentAccountUsername = localStorage.getItem('dragon_clicker_username') || '';
+let isAdminAuthenticated = false;
 
 // Anti-cheat variables
 let clickTimestamps = [];
@@ -11,9 +12,17 @@ function checkAntiCheat() {
   const now = Date.now();
   clickTimestamps.push(now);
   clickTimestamps = clickTimestamps.filter(t => now - t < 1000);
+  
+  // Triggered at 30 CPS or higher
   if (clickTimestamps.length >= 30) {
     isAntiCheatTriggered = true;
     document.getElementById('anticheat-screen').classList.remove('hidden');
+    
+    // Notify server of cheater detection
+    socket.emit('cheaterDetected', {
+      username: currentAccountUsername,
+      cps: clickTimestamps.length
+    });
     return true;
   }
   return false;
@@ -64,16 +73,26 @@ const DRAGON_SKINS = Array.from({ length: 52 }, (_, i) => {
   };
 });
 
-// AUTO LOGIN IF USERNAME IS SAVED
-if (currentAccountUsername) {
-  socket.emit('userLogin', { username: currentAccountUsername });
+// SUBMIT LOGIN FUNCTION
+function submitLogin() {
+  const inputEl = document.getElementById('username-input');
+  const input = inputEl ? inputEl.value.trim() : '';
+  const errEl = document.getElementById('login-error');
+
+  if (!input) {
+    if (errEl) {
+      errEl.textContent = 'Please enter a username!';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  socket.emit('userLogin', { username: input });
 }
 
-function submitLogin() {
-  const input = document.getElementById('username-input').value.trim();
-  if (input) {
-    socket.emit('userLogin', { username: input });
-  }
+// AUTO LOGIN IF USERNAME SAVED
+if (currentAccountUsername) {
+  socket.emit('userLogin', { username: currentAccountUsername });
 }
 
 function logoutAccount() {
@@ -222,7 +241,61 @@ function updateUI(state) {
   renderDynamicContent();
 }
 
-// Socket Events
+// SOCKET LEADERBOARD HANDLER
+socket.on('updateLeaderboard', (leaderboard) => {
+  const container = document.getElementById('leaderboard-list');
+  if (!container) return;
+
+  container.innerHTML = '';
+  if (leaderboard.length === 0) {
+    container.innerHTML = `<div class="text-center text-xs text-purple-300">No players registered yet.</div>`;
+    return;
+  }
+
+  leaderboard.forEach((player, idx) => {
+    const isMe = player.username.toLowerCase() === currentAccountUsername.toLowerCase();
+    const rankColors = ['text-yellow-400', 'text-slate-300', 'text-amber-600'];
+    const rankBadges = ['🥇', '🥈', '🥉'];
+
+    const el = document.createElement('div');
+    el.className = `glass-panel p-4 rounded-2xl flex items-center justify-between border ${isMe ? 'border-amber-400 bg-amber-500/20' : 'border-purple-500/20'}`;
+    el.innerHTML = `
+      <div class="flex items-center space-x-4">
+        <span class="text-lg font-black font-mono ${rankColors[idx] || 'text-purple-400'} w-8">
+          ${rankBadges[idx] || `#${idx + 1}`}
+        </span>
+        <div>
+          <div class="font-bold text-sm text-white ${isMe ? 'text-amber-300 font-black' : ''}">
+            ${player.username} ${isMe ? '<span class="text-[10px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded ml-1">YOU</span>' : ''}
+          </div>
+          <div class="text-xs text-purple-300">🎫 ${player.goldenTickets.toLocaleString()} Golden Tickets</div>
+        </div>
+      </div>
+      <div class="text-right font-mono font-bold text-amber-400 text-base">
+        $${Math.floor(player.cash).toLocaleString()}
+      </div>
+    `;
+    container.appendChild(el);
+  });
+});
+
+// SOCKET CHEATER ALERT FOR ADMINS
+socket.on('adminCheaterAlert', (data) => {
+  if (isAdminAuthenticated) {
+    // Automatically copy username to admin clipboard
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(data.username).catch(() => {});
+    }
+
+    // Populate ban input with cheater username
+    const banInput = document.getElementById('admin-ban-username');
+    if (banInput) banInput.value = data.username;
+
+    // Show popup
+    alert(`🚨 CHEATER DETECTED!\nPlayer: ${data.username}\nCPS: ${data.cps}\n\nTheir username has been copied to your clipboard & pasted into the ban field!`);
+  }
+});
+
 socket.on('syncState', (state) => {
   updateUI(state);
 });
@@ -268,6 +341,7 @@ function switchTab(tabId) {
   document.getElementById('screen-game').classList.add('hidden');
   document.getElementById('screen-shop').classList.add('hidden');
   document.getElementById('screen-ascension').classList.add('hidden');
+  document.getElementById('screen-leaderboard').classList.add('hidden');
 
   document.getElementById(`screen-${tabId}`).classList.remove('hidden');
 }
@@ -279,6 +353,7 @@ function closeAdminModal() { document.getElementById('admin-modal').classList.ad
 function verifyAdminPasscode() {
   const code = document.getElementById('admin-passcode-input').value;
   if (code === '6021') {
+    isAdminAuthenticated = true;
     document.getElementById('admin-passcode-view').classList.add('hidden');
     document.getElementById('admin-tools-view').classList.remove('hidden');
   } else {
