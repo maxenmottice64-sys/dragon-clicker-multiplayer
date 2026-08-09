@@ -61,10 +61,10 @@
         <p class="text-xs text-purple-300 mt-1">Enter a unique username to start or resume your game</p>
       </div>
       <div class="space-y-3">
-        <input type="text" id="username-input" maxlength="16" placeholder="Choose Username..." class="w-full bg-slate-900/90 border border-purple-500/40 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400">
+        <input type="text" id="username-input" maxlength="16" placeholder="Choose Username..." onkeydown="if(event.key==='Enter') submitLogin()" class="w-full bg-slate-900/90 border border-purple-500/40 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400">
         <div id="login-error" class="text-xs font-bold text-red-400 hidden"></div>
       </div>
-      <button onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base">
+      <button type="button" onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base cursor-pointer">
         PLAY NOW
       </button>
     </div>
@@ -110,7 +110,8 @@
     </div>
     <div class="space-y-2">
       <h1 class="text-6xl md:text-8xl font-black font-cinzel text-white tracking-widest drop-shadow-lg">DON'T CHEAT!</h1>
-      <p class="text-xl md:text-2xl font-bold text-red-100 max-w-lg mx-auto">Autoclicker Detected! (Exceeded 30 CPS)</p>
+      <p class="text-xl md:text-2xl font-bold text-red-100 max-w-lg mx-auto">Autoclicker Detected! (30+ CPS)</p>
+      <p class="text-xs text-amber-200">Admins have been notified and your username has been reported.</p>
     </div>
     <button onclick="location.reload()" class="px-8 py-4 bg-white text-red-700 hover:bg-red-100 font-extrabold text-lg rounded-2xl shadow-2xl transition transform hover:scale-105">
       Restart Game
@@ -139,6 +140,9 @@
       </button>
       <button onclick="switchTab('ascension')" id="tab-ascension" class="px-4 py-2 rounded-xl text-sm font-bold text-amber-300 hover:text-amber-100 hover:bg-amber-500/20 flex items-center space-x-2">
         <i class="fa-solid fa-hat-wizard"></i><span>Ascension</span>
+      </button>
+      <button onclick="switchTab('leaderboard')" id="tab-leaderboard" class="px-4 py-2 rounded-xl text-sm font-bold text-yellow-400 hover:text-yellow-200 hover:bg-yellow-500/20 flex items-center space-x-2">
+        <i class="fa-solid fa-trophy"></i><span>Leaderboard</span>
       </button>
       <button onclick="openAdminModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/20 flex items-center space-x-1">
         <i class="fa-solid fa-user-shield"></i><span>Admin</span>
@@ -269,6 +273,21 @@
           </h3>
           <div id="skins-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[450px] overflow-y-auto pr-2"></div>
         </div>
+      </div>
+    </section>
+
+    <section id="screen-leaderboard" class="hidden w-full max-w-3xl z-10">
+      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-yellow-500/40 shadow-2xl space-y-6">
+        <div class="text-center space-y-2 border-b border-yellow-500/20 pb-4">
+          <div class="inline-block p-3 bg-gradient-to-tr from-yellow-500 to-amber-600 rounded-2xl text-slate-950 text-3xl font-black shadow-lg">
+            <i class="fa-solid fa-trophy"></i>
+          </div>
+          <h2 class="text-3xl font-black font-cinzel text-yellow-300">GLOBAL LEADERBOARD</h2>
+          <p class="text-xs text-purple-300">Top 10 Wealthiest Dragons on the Server</p>
+        </div>
+
+        <div id="leaderboard-list" class="space-y-3">
+          </div>
       </div>
     </section>
 
