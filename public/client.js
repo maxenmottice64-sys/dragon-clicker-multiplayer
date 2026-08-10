@@ -52,7 +52,7 @@ socket.on('accountBanned', (data) => {
   document.getElementById('banned-modal').classList.remove('hidden');
 });
 
-// CLICK ACTION FUNCTION WITH ANTI-CHEAT
+// CLICK ACTION FUNCTION WITH ANTI-CHEAT & ADMIN ALERT
 function triggerClick() {
   if (!currentUser || isBannedByAntiCheat) return;
 
@@ -65,10 +65,19 @@ function triggerClick() {
   // Anti-cheat trigger (More than 30 clicks in 1 second)
   if (clickTimestamps.length > 30) {
     isBannedByAntiCheat = true;
+
+    // Show anti-cheat screen to the cheater
     const anticheatScreen = document.getElementById('anticheat-screen');
     if (anticheatScreen) {
       anticheatScreen.classList.remove('hidden');
     }
+
+    // ALERT THE SERVER AND ADMINS
+    socket.emit('antiCheatTriggered', {
+      username: currentUser,
+      cps: clickTimestamps.length
+    });
+
     return;
   }
 
@@ -94,13 +103,11 @@ window.addEventListener('keydown', (e) => {
 
 // REALTIME MULTIPLAYER CLICK RECEIVER
 socket.on('playerClicked', (data) => {
-  // Update local cash counter if this was your click
   if (data.username === currentUser) {
     myData.cash = data.cash;
     updateUI();
   }
 
-  // Floating text popups for all clicks in the room
   spawnFloatingText(`+$${data.cpc}`, data.username === currentUser ? '#4ade80' : '#f59e0b');
 });
 
@@ -196,6 +203,16 @@ function createNewServer() {
   joinServerRoom(roomName, isPrivate);
   toggleCreateServerForm();
 }
+
+// ADMIN ANTI-CHEAT ALERT RECEIVER
+socket.on('adminAntiCheatAlert', (data) => {
+  console.warn(`[ANTI-CHEAT ALERT] Player "${data.username}" flagged for ${data.cps} CPS in server "${data.room}".`);
+  
+  const adminModal = document.getElementById('admin-modal');
+  if (adminModal && !adminModal.classList.contains('hidden')) {
+    alert(`⚠️ CHEATER DETECTED ⚠️\n\nPlayer: ${data.username}\nServer: ${data.room}\nCPS: ${data.cps}`);
+  }
+});
 
 // FLOATING ANIMATIONS
 function spawnFloatingText(text, color) {
