@@ -40,6 +40,7 @@ function getActiveServers() {
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
+  // LOGIN
   socket.on('login', (data) => {
     const username = data.username ? data.username.trim() : '';
 
@@ -68,13 +69,16 @@ io.on('connection', (socket) => {
       currentRoom: 'Main Global'
     });
 
+    // Broadcast updated leaderboard to all players in Main Global
     io.to('Main Global').emit('updateLeaderboard', getRoomLeaderboard('Main Global'));
   });
 
+  // GET SERVERS LIST
   socket.on('getServersList', () => {
     socket.emit('serversList', getActiveServers());
   });
 
+  // JOIN ROOM
   socket.on('joinRoom', (data) => {
     const player = players[socket.id];
     if (!player) return;
@@ -96,6 +100,7 @@ io.on('connection', (socket) => {
     io.emit('serversList', getActiveServers());
   });
 
+  // CREATE ROOM
   socket.on('createRoom', (data) => {
     const { roomName, isPrivate, passcode } = data;
     if (!roomName) return;
@@ -107,6 +112,7 @@ io.on('connection', (socket) => {
     io.emit('serversList', getActiveServers());
   });
 
+  // CLICK ACTION (REAL-TIME ROOM BROADCAST)
   socket.on('click', () => {
     const player = players[socket.id];
     if (!player) return;
@@ -116,15 +122,18 @@ io.on('connection', (socket) => {
 
     const room = player.currentRoom || 'Main Global';
 
+    // Broadcast score change and click event to everyone in the same room
     io.to(room).emit('playerClicked', {
       username: player.username,
       cash: player.cash,
       cpc: cpc
     });
 
+    // Update real-time leaderboard for everyone in the room
     io.to(room).emit('updateLeaderboard', getRoomLeaderboard(room));
   });
 
+  // ADMIN ACTIONS
   socket.on('adminAction', (data) => {
     const { action, payload } = data;
 
@@ -149,6 +158,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // DISCONNECT
   socket.on('disconnect', () => {
     const player = players[socket.id];
     if (player) {
