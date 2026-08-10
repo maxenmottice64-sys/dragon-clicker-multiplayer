@@ -80,6 +80,59 @@
     </div>
   </div>
 
+  <div id="admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
+    <div class="glass-panel p-6 rounded-3xl border border-red-500/40 max-w-md w-full space-y-4">
+      <div class="flex justify-between items-center border-b border-red-500/20 pb-3">
+        <h3 class="text-xl font-black font-cinzel text-red-400">ADMIN CONTROLS</h3>
+        <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white font-bold">✕</button>
+      </div>
+
+      <div id="admin-passcode-view" class="space-y-3">
+        <p class="text-xs text-purple-300">Enter administrator passcode to unlock tools:</p>
+        <input type="password" id="admin-passcode-input" placeholder="Passcode (e.g. 6021)" onkeydown="if(event.key==='Enter') verifyAdminPasscode()" class="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-4 py-2 text-center text-sm font-bold text-white focus:outline-none">
+        <button onclick="verifyAdminPasscode()" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs">Unlock Panel</button>
+      </div>
+
+      <div id="admin-tools-view" class="space-y-4 hidden max-h-[400px] overflow-y-auto pr-1">
+        <div class="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-2">
+          <span class="text-xs font-bold text-red-300 uppercase">Cheater Ban Hammer</span>
+          <input type="text" id="admin-ban-username" placeholder="Target Username..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
+          <input type="text" id="admin-ban-reason" placeholder="Ban Reason..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
+          <button onclick="adminBanUser()" class="w-full py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg">🔨 Ban User</button>
+        </div>
+
+        <div class="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-2">
+          <span class="text-xs font-bold text-amber-300 uppercase">Server Broadcast</span>
+          <input type="text" id="admin-announcement-input" placeholder="Broadcast message to all..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
+          <button onclick="adminSendAnnouncement()" class="w-full py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-lg">📢 Send Announcement</button>
+        </div>
+
+        <div class="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-2">
+          <span class="text-xs font-bold text-green-300 uppercase">Developer Give Command</span>
+          <div class="grid grid-cols-2 gap-2">
+            <button onclick="adminAddCash(1000000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-green-400 font-bold text-xs rounded-lg">+$1M Cash</button>
+            <button onclick="adminAddTickets(50)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-lg">+50 Tickets</button>
+            <button onclick="adminAddCPC(1000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold text-xs rounded-lg">+1,000 CPC</button>
+            <button onclick="adminAddCPS(5000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-lg">+5,000 CPS</button>
+          </div>
+        </div>
+
+        <button onclick="adminResetAllCash()" class="w-full py-2 bg-red-900/80 hover:bg-red-800 border border-red-500 text-red-200 font-bold text-xs rounded-xl">
+          ⚠️ Wipe All Server Accounts
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="announcement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[120] flex items-center justify-center p-4 hidden">
+    <div class="glass-panel p-6 rounded-3xl border-2 border-amber-500/50 max-w-sm w-full text-center space-y-4">
+      <div class="text-4xl text-amber-400">📢</div>
+      <h3 class="text-lg font-black font-cinzel text-amber-300">SERVER ANNOUNCEMENT</h3>
+      <p id="announcement-text" class="text-sm font-semibold text-white bg-purple-950/50 p-4 rounded-xl border border-purple-500/20"></p>
+      <button onclick="closeAnnouncementModal()" class="w-full py-2 bg-amber-500 text-slate-950 font-extrabold rounded-xl text-xs">Dismiss</button>
+    </div>
+  </div>
+
   <div id="banned-modal" class="fixed inset-0 bg-red-950/95 backdrop-blur-xl z-[130] flex flex-col items-center justify-center p-6 text-center space-y-6 hidden">
     <div class="p-6 bg-black/50 rounded-full border-4 border-red-500 shadow-2xl animate-bounce">
       <i class="fa-solid fa-ban text-7xl text-red-500"></i>
@@ -245,7 +298,18 @@
 
     <section id="screen-ascension" class="hidden w-full max-w-5xl z-10">
       <div class="glass-panel p-6 md:p-8 rounded-3xl border border-amber-500/30 shadow-2xl space-y-8">
-        <h2 class="text-3xl font-black font-cinzel text-amber-300">Ascension & Skins</h2>
+        <div class="flex justify-between items-center border-b border-amber-500/20 pb-4">
+          <div>
+            <h2 class="text-3xl font-black font-cinzel text-amber-300">Ascension & Skins</h2>
+            <p class="text-xs text-purple-300">Reset your progress to earn Golden Tickets (+10% Boost Each)</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <span id="ascension-tickets" class="text-lg font-bold text-amber-300 font-mono">🎫 0</span>
+            <button onclick="performAscension()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs rounded-xl shadow-lg">
+              Ascend (<span id="pending-tickets">+0 🎫</span>)
+            </button>
+          </div>
+        </div>
         <div id="skins-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto"></div>
       </div>
     </section>
