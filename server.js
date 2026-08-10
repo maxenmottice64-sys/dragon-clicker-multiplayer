@@ -7,7 +7,7 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 let users = {};
-let bannedUsers = {}; // bannedUsers[username] = reason
+let bannedUsers = {}; 
 
 function getSkinBoost(skinLevel) {
   return 1 + (skinLevel * 0.10); 
@@ -34,31 +34,45 @@ function resetAllUserAccounts() {
   }
 }
 
-// Generate Top 10 Leaderboard
-function getLeaderboardData() {
-  const userList = Object.keys(users).map(key => ({
-    username: users[key].displayName || key,
-    cash: users[key].cash || 0,
-    goldenTickets: users[key].goldenTickets || 0
-  }));
+// Generate Top 10 Leaderboard for a specific Room
+function getLeaderboardData(roomId = 'public') {
+  const roomSockets = Array.from(io.sockets.sockets.values()).filter(s => s.currentRoom === roomId);
+  const roomUsers = roomSockets.map(s => {
+    const key = s.usernameKey;
+    return {
+      username: users[key]?.displayName || key,
+      cash: users[key]?.cash || 0,
+      goldenTickets: users[key]?.goldenTickets || 0
+    };
+  });
 
-  userList.sort((a, b) => b.cash - a.cash);
-  return userList.slice(0, 10);
+  roomUsers.sort((a, b) => b.cash - a.cash);
+  return roomUsers.slice(0, 10);
 }
 
-function broadcastLeaderboard() {
-  io.emit('updateLeaderboard', getLeaderboardData());
+function broadcastLeaderboard(roomId = 'public') {
+  io.to(roomId).emit('updateLeaderboard', getLeaderboardData(roomId));
+}
+
+function getRoomPlayerList(roomId) {
+  const roomSockets = Array.from(io.sockets.sockets.values()).filter(s => s.currentRoom === roomId);
+  return roomSockets.map(s => ({
+    username: users[s.usernameKey]?.displayName || s.usernameKey,
+    activeSkinIcon: users[s.usernameKey]?.activeSkinIcon || '🐉'
+  }));
+}
+
+function broadcastRoomPlayers(roomId) {
+  io.to(roomId).emit('roomPlayersUpdate', getRoomPlayerList(roomId));
 }
 
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
   let currentUsername = null;
+  socket.currentRoom = 'public';
 
-  // Send initial leaderboard on connect
-  socket.emit('updateLeaderboard', getLeaderboardData());
-
-  // Login or Register attempt
+  // Login or Register
   socket.on('userLogin', (data) => {
     const rawUsername = data && data.username ? data.username.trim() : '';
     
@@ -68,18 +82,15 @@ io.on('connection', (socket) => {
 
     const usernameKey = rawUsername.toLowerCase();
 
-    // Check if banned
     if (bannedUsers[usernameKey]) {
       return socket.emit('userBanned', { reason: bannedUsers[usernameKey] });
     }
 
-    // Check duplicate active sessions
     const isAlreadyConnected = Array.from(io.sockets.sockets.values()).some(s => s.usernameKey === usernameKey && s.id !== socket.id);
     if (isAlreadyConnected) {
       return socket.emit('loginError', 'This username is currently active in another session!');
     }
 
-    // Register / Load account
     if (!users[usernameKey]) {
       users[usernameKey] = getDefaultStats();
       users[usernameKey].displayName = rawUsername;
@@ -87,16 +98,39 @@ io.on('connection', (socket) => {
 
     currentUsername = usernameKey;
     socket.usernameKey = usernameKey;
+    socket.currentRoom = 'public';
+    socket.join('public');
 
     socket.emit('loginSuccess', {
       username: users[usernameKey].displayName || rawUsername,
-      state: users[usernameKey]
+      state: users[usernameKey],
+      roomId: 'public'
     });
 
-    broadcastLeaderboard();
+    broadcastLeaderboard('public');
+    broadcastRoomPlayers('public');
   });
 
-  // Player click
+  // Switch / Join Server Room (Public or Private)
+  socket.on('joinRoom', (targetRoomId) => {
+    if (!currentUsername) return;
+
+    const oldRoom = socket.currentRoom;
+    socket.leave(oldRoom);
+
+    const roomCode = targetRoomId ? targetRoomId.trim().toUpperCase() : 'PUBLIC';
+    socket.currentRoom = roomCode;
+    socket.join(roomCode);
+
+    socket.emit('roomJoined', { roomId: roomCode });
+
+    broadcastLeaderboard(oldRoom);
+    broadcastRoomPlayers(oldRoom);
+    broadcastLeaderboard(roomCode);
+    broadcastRoomPlayers(roomCode);
+  });
+
+  // Player Click & Broadcast to Room
   socket.on('playerClick', () => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -108,10 +142,18 @@ io.on('connection', (socket) => {
     user.cash += earned;
 
     socket.emit('syncState', user);
-    broadcastLeaderboard();
+    
+    // Broadcast click visual effect to everyone in the same room
+    io.to(socket.currentRoom).emit('remotePlayerClick', {
+      username: user.displayName,
+      earned: earned,
+      skinIcon: user.activeSkinIcon
+    });
+
+    broadcastLeaderboard(socket.currentRoom);
   });
 
-  // Buying an upgrade
+  // Buy Upgrade
   socket.on('buyUpgrade', (data) => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -127,11 +169,11 @@ io.on('connection', (socket) => {
         user.cpsUpgradesCount[id] = (user.cpsUpgradesCount[id] || 0) + 1;
       }
       socket.emit('syncState', user);
-      broadcastLeaderboard();
+      broadcastLeaderboard(socket.currentRoom);
     }
   });
 
-  // Equipping skin
+  // Equip Skin
   socket.on('equipSkin', (skinData) => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -140,9 +182,10 @@ io.on('connection', (socket) => {
     user.activeSkinName = skinData.name;
     user.activeSkinLevel = skinData.level || 1;
     socket.emit('syncState', user);
+    broadcastRoomPlayers(socket.currentRoom);
   });
 
-  // Ascension execution
+  // Ascension
   socket.on('performAscension', () => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -159,16 +202,15 @@ io.on('connection', (socket) => {
       user.cpsUpgradesCount = {};
       
       socket.emit('syncState', user);
-      broadcastLeaderboard();
+      broadcastLeaderboard(socket.currentRoom);
     }
   });
 
-  // Anti-cheat alert handler
+  // Anti-cheat Alert Handler
   socket.on('cheaterDetected', (data) => {
     if (!currentUsername) return;
     const displayName = users[currentUsername] ? users[currentUsername].displayName : currentUsername;
     
-    // Broadcast cheater alert to all connected sockets
     io.emit('adminCheaterAlert', {
       username: displayName,
       cps: data.cps || 30
@@ -182,7 +224,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Admin Ban User System
+  // Admin Ban User
   socket.on('adminBanUser', (data) => {
     const targetUsername = data.targetUsername ? data.targetUsername.trim().toLowerCase() : '';
     const reason = data.reason ? data.reason.trim() : 'Violation of community guidelines.';
@@ -199,7 +241,7 @@ io.on('connection', (socket) => {
     }
 
     io.emit('serverNotification', `🔨 Player "${data.targetUsername}" has been banned for: ${reason}`);
-    broadcastLeaderboard();
+    broadcastLeaderboard('public');
   });
 
   // Admin modifications
@@ -214,7 +256,7 @@ io.on('connection', (socket) => {
 
     if (mod.resetAllCash) {
       resetAllUserAccounts();
-      io.emit('serverNotification', '🚨 An Admin has completely reset all user stats, Golden Tickets, and unlocked skins!');
+      io.emit('serverNotification', '🚨 An Admin has completely reset all user stats across all servers!');
       for (let [id, s] of io.sockets.sockets) {
         if (s.usernameKey && users[s.usernameKey]) {
           s.emit('syncState', users[s.usernameKey]);
@@ -224,7 +266,12 @@ io.on('connection', (socket) => {
       socket.emit('syncState', user);
     }
 
-    broadcastLeaderboard();
+    broadcastLeaderboard(socket.currentRoom);
+  });
+
+  socket.on('disconnect', () => {
+    broadcastLeaderboard(socket.currentRoom);
+    broadcastRoomPlayers(socket.currentRoom);
   });
 });
 
@@ -242,18 +289,6 @@ setInterval(() => {
     }
   }
 }, 1000);
-
-// AUTOMATIC FULL RESET EVERY 30 MINUTES
-setInterval(() => {
-  resetAllUserAccounts();
-  io.emit('serverNotification', '⏰ 30-Minute Automated Reset: All cash, upgrades, Golden Tickets, and skins have been wiped across all accounts!');
-  for (let [id, socket] of io.sockets.sockets) {
-    if (socket.usernameKey && users[socket.usernameKey]) {
-      socket.emit('syncState', users[socket.usernameKey]);
-    }
-  }
-  broadcastLeaderboard();
-}, 30 * 60 * 1000);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`Dragon Server running on http://localhost:${PORT}`));
