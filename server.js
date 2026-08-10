@@ -69,7 +69,6 @@ io.on('connection', (socket) => {
       currentRoom: 'Main Global'
     });
 
-    // Broadcast updated leaderboard to all players in Main Global
     io.to('Main Global').emit('updateLeaderboard', getRoomLeaderboard('Main Global'));
   });
 
@@ -112,7 +111,7 @@ io.on('connection', (socket) => {
     io.emit('serversList', getActiveServers());
   });
 
-  // CLICK ACTION (REAL-TIME ROOM BROADCAST)
+  // CLICK ACTION
   socket.on('click', () => {
     const player = players[socket.id];
     if (!player) return;
@@ -122,15 +121,30 @@ io.on('connection', (socket) => {
 
     const room = player.currentRoom || 'Main Global';
 
-    // Broadcast score change and click event to everyone in the same room
     io.to(room).emit('playerClicked', {
       username: player.username,
       cash: player.cash,
       cpc: cpc
     });
 
-    // Update real-time leaderboard for everyone in the room
     io.to(room).emit('updateLeaderboard', getRoomLeaderboard(room));
+  });
+
+  // ANTI-CHEAT FLAG EVENT
+  socket.on('antiCheatTriggered', (data) => {
+    const player = players[socket.id];
+    const username = player ? player.username : data.username;
+    const room = player ? player.currentRoom : 'Unknown';
+
+    console.log(`[SECURITY] Anti-Cheat Triggered by ${username} (${data.cps} CPS) in ${room}`);
+
+    // Broadcast alert to connected sockets (admin listeners will receive this)
+    io.emit('adminAntiCheatAlert', {
+      username: username,
+      cps: data.cps,
+      room: room,
+      timestamp: new Date().toLocaleTimeString()
+    });
   });
 
   // ADMIN ACTIONS
