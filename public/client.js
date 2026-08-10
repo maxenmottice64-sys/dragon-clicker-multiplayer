@@ -4,6 +4,10 @@ let currentUser = null;
 let currentRoom = 'Main Global';
 let myData = { cash: 0, cpc: 1, cps: 0, tickets: 0 };
 
+// ANTI-CHEAT TRACKING
+let clickTimestamps = [];
+let isBannedByAntiCheat = false;
+
 // LOGIN
 function submitLogin() {
   const usernameInput = document.getElementById('username-input');
@@ -48,9 +52,26 @@ socket.on('accountBanned', (data) => {
   document.getElementById('banned-modal').classList.remove('hidden');
 });
 
-// CLICK ACTION FUNCTION
+// CLICK ACTION FUNCTION WITH ANTI-CHEAT
 function triggerClick() {
-  if (!currentUser) return;
+  if (!currentUser || isBannedByAntiCheat) return;
+
+  const now = Date.now();
+  clickTimestamps.push(now);
+
+  // Keep only clicks from the last 1 second (1000ms)
+  clickTimestamps = clickTimestamps.filter(time => now - time <= 1000);
+
+  // Anti-cheat trigger (More than 30 clicks in 1 second)
+  if (clickTimestamps.length > 30) {
+    isBannedByAntiCheat = true;
+    const anticheatScreen = document.getElementById('anticheat-screen');
+    if (anticheatScreen) {
+      anticheatScreen.classList.remove('hidden');
+    }
+    return;
+  }
+
   socket.emit('click');
 }
 
