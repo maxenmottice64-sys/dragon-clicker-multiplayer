@@ -63,7 +63,7 @@
         <input type="text" id="username-input" maxlength="16" placeholder="Choose Username..." onkeydown="if(event.key==='Enter') submitLogin()" class="w-full bg-slate-900/90 border border-purple-500/40 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400">
         <div id="login-error" class="text-xs font-bold text-red-400 hidden"></div>
       </div>
-      <button type="button" onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base cursor-pointer">
+      <button type="button" id="play-now-btn" onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base cursor-pointer">
         PLAY NOW
       </button>
     </div>
@@ -363,5 +363,21 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="client.js"></script>
+  <script>
+    // Fallback handler to guarantee button registration even if event handlers load slowly
+    document.addEventListener("DOMContentLoaded", () => {
+      const playBtn = document.getElementById("play-now-btn");
+      if (playBtn) {
+        playBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (typeof submitLogin === "function") {
+            submitLogin();
+          } else {
+            console.error("submitLogin function not loaded yet from client.js");
+          }
+        });
+      }
+    });
+  </script>
 </body>
 </html>
