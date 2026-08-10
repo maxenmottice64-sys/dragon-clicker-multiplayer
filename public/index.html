@@ -80,46 +80,81 @@
     </div>
   </div>
 
-  <div id="admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
-    <div class="glass-panel p-6 rounded-3xl border border-red-500/40 max-w-md w-full space-y-4">
-      <div class="flex justify-between items-center border-b border-red-500/20 pb-3">
-        <h3 class="text-xl font-black font-cinzel text-red-400">ADMIN CONTROLS</h3>
-        <button onclick="closeAdminModal()" class="text-slate-400 hover:text-white font-bold">✕</button>
+  <div id="admin-modal" class="fixed inset-0 bg-slate-950/90 backdrop-blur-xl z-[110] flex items-center justify-center p-4 hidden">
+    <div class="glass-panel p-8 rounded-3xl border-2 border-red-500/50 max-w-2xl w-full space-y-6 shadow-2xl relative">
+      <button onclick="closeAdminModal()" class="absolute top-6 right-6 text-slate-400 hover:text-white font-black text-xl">✕</button>
+      
+      <div class="flex items-center space-x-4 border-b border-red-500/30 pb-4">
+        <div class="p-3 bg-red-600/30 rounded-2xl border border-red-500/40 text-red-400 text-2xl">
+          <i class="fa-solid fa-user-shield"></i>
+        </div>
+        <div>
+          <h2 class="text-2xl font-black font-cinzel text-red-400">ADMINISTRATOR CONTROL PANEL</h2>
+          <p class="text-xs text-purple-300">Server Management & Developer Overrides</p>
+        </div>
       </div>
 
-      <div id="admin-passcode-view" class="space-y-3">
-        <p class="text-xs text-purple-300">Enter administrator passcode to unlock tools:</p>
-        <input type="password" id="admin-passcode-input" placeholder="Passcode" onkeydown="if(event.key==='Enter') verifyAdminPasscode()" class="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-4 py-2 text-center text-sm font-bold text-white focus:outline-none">
-        <button onclick="verifyAdminPasscode()" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-xs">Unlock Panel</button>
+      <div id="admin-passcode-view" class="space-y-4 py-6 text-center max-w-sm mx-auto">
+        <i class="fa-solid fa-lock text-4xl text-red-400"></i>
+        <h3 class="text-lg font-bold text-white">Authentication Required</h3>
+        <input type="password" id="admin-passcode-input" placeholder="Passcode" onkeydown="if(event.key==='Enter') verifyAdminPasscode()" class="w-full bg-slate-900/90 border border-red-500/40 rounded-xl px-4 py-3 text-center text-sm font-bold text-white focus:outline-none focus:border-red-400">
+        <button onclick="verifyAdminPasscode()" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-xs tracking-wider uppercase transition shadow-lg">
+          Unlock Admin Panel
+        </button>
       </div>
 
-      <div id="admin-tools-view" class="space-y-4 hidden max-h-[400px] overflow-y-auto pr-1">
-        <div class="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-2">
-          <span class="text-xs font-bold text-red-300 uppercase">Cheater Ban Hammer</span>
-          <input type="text" id="admin-ban-username" placeholder="Target Username..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
-          <input type="text" id="admin-ban-reason" placeholder="Ban Reason..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
-          <button onclick="adminBanUser()" class="w-full py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg">🔨 Ban User</button>
-        </div>
+      <div id="admin-tools-view" class="space-y-6 hidden max-h-[500px] overflow-y-auto pr-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="bg-red-950/40 p-4 rounded-2xl border border-red-500/30 space-y-3">
+            <div class="flex items-center space-x-2 text-red-400 font-bold text-sm">
+              <i class="fa-solid fa-hammer"></i>
+              <span>CHEATER BAN HAMMER</span>
+            </div>
+            <input type="text" id="admin-ban-username" placeholder="Target Username..." class="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white">
+            <input type="text" id="admin-ban-reason" placeholder="Reason for ban..." class="w-full bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white">
+            <button onclick="adminBanUser()" class="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition">
+              Ban User Immediately
+            </button>
+          </div>
 
-        <div class="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-2">
-          <span class="text-xs font-bold text-amber-300 uppercase">Server Broadcast</span>
-          <input type="text" id="admin-announcement-input" placeholder="Broadcast message to all..." class="w-full bg-slate-900 border border-purple-500/30 rounded-lg px-3 py-1.5 text-xs text-white">
-          <button onclick="adminSendAnnouncement()" class="w-full py-1.5 bg-amber-500 text-slate-950 font-bold text-xs rounded-lg">📢 Send Announcement</button>
-        </div>
-
-        <div class="p-3 bg-purple-950/40 border border-purple-500/30 rounded-xl space-y-2">
-          <span class="text-xs font-bold text-green-300 uppercase">Developer Give Command</span>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="adminAddCash(1000000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-green-400 font-bold text-xs rounded-lg">+$1M Cash</button>
-            <button onclick="adminAddTickets(50)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-lg">+50 Tickets</button>
-            <button onclick="adminAddCPC(1000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold text-xs rounded-lg">+1,000 CPC</button>
-            <button onclick="adminAddCPS(5000)" class="py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-lg">+5,000 CPS</button>
+          <div class="bg-purple-950/40 p-4 rounded-2xl border border-purple-500/30 space-y-3">
+            <div class="flex items-center space-x-2 text-amber-300 font-bold text-sm">
+              <i class="fa-solid fa-bullhorn"></i>
+              <span>GLOBAL ANNOUNCEMENT</span>
+            </div>
+            <textarea id="admin-announcement-input" rows="3" placeholder="Broadcast message to all connected players..." class="w-full bg-slate-900 border border-purple-500/30 rounded-xl p-3 text-xs text-white focus:outline-none resize-none"></textarea>
+            <button onclick="adminSendAnnouncement()" class="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl transition">
+              Broadcast Message
+            </button>
           </div>
         </div>
 
-        <button onclick="adminResetAllCash()" class="w-full py-2 bg-red-900/80 hover:bg-red-800 border border-red-500 text-red-200 font-bold text-xs rounded-xl">
-          ⚠️ Wipe All Server Accounts
-        </button>
+        <div class="bg-purple-950/40 p-4 rounded-2xl border border-purple-500/30 space-y-3">
+          <div class="flex items-center space-x-2 text-green-400 font-bold text-sm">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>DEVELOPER CURRENCY OVERRIDES</span>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <button onclick="adminAddCash(1000000)" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-green-400 font-bold text-xs rounded-xl border border-green-500/30 transition">
+              +$1,000,000 Cash
+            </button>
+            <button onclick="adminAddTickets(50)" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs rounded-xl border border-amber-500/30 transition">
+              +50 Golden Tickets
+            </button>
+            <button onclick="adminAddCPC(1000)" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold text-xs rounded-xl border border-purple-500/30 transition">
+              +1,000 CPC
+            </button>
+            <button onclick="adminAddCPS(5000)" class="py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold text-xs rounded-xl border border-cyan-500/30 transition">
+              +5,000 CPS
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-red-500/20">
+          <button onclick="adminResetAllCash()" class="w-full py-3 bg-red-950/80 hover:bg-red-900 border-2 border-red-500 text-red-200 font-bold text-xs rounded-2xl transition">
+            ⚠️ DANGER: WIPE ALL SERVER ECONOMY ACCOUNTS
+          </button>
+        </div>
       </div>
     </div>
   </div>
