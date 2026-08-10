@@ -8,10 +8,10 @@ const io = new Server(server);
 
 app.use(express.static('public'));
 
-// In-memory data store
-const players = {}; // socket.id -> player object
+const players = {};
 const bannedUsers = new Set();
-const roomPasscodes = {}; // roomName -> passcode
+const roomPasscodes = {};
+const createdRooms = new Set(['Main Global']);
 
 function getRoomLeaderboard(roomName) {
   return Object.values(players)
@@ -20,10 +20,26 @@ function getRoomLeaderboard(roomName) {
     .map(p => ({ username: p.username, cash: p.cash }));
 }
 
+function getActiveServers() {
+  const roomCounts = {};
+  createdRooms.forEach(room => roomCounts[room] = 0);
+
+  Object.values(players).forEach(p => {
+    if (p.currentRoom) {
+      roomCounts[p.currentRoom] = (roomCounts[p.currentRoom] || 0) + 1;
+    }
+  });
+
+  return Array.from(createdRooms).map(roomName => ({
+    name: roomName,
+    isPrivate: !!roomPasscodes[roomName],
+    playerCount: roomCounts[roomName] || 0
+  }));
+}
+
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // LOGIN HANDLER
   socket.on('login', (data) => {
     const username = data.username ? data.username.trim() : '';
 
@@ -35,7 +51,6 @@ io.on('connection', (socket) => {
       return socket.emit('accountBanned', { reason: 'Violation of server rules.' });
     }
 
-    // Default player profile
     players[socket.id] = {
       username: username,
       cash: 0,
@@ -46,54 +61,52 @@ io.on('connection', (socket) => {
       currentRoom: 'Main Global'
     };
 
-    // Join default room
     socket.join('Main Global');
 
-    // Confirm successful login
     socket.emit('loginSuccess', {
       user: players[socket.id],
       currentRoom: 'Main Global'
     });
 
-    // Send initial leaderboard for room
     io.to('Main Global').emit('updateLeaderboard', getRoomLeaderboard('Main Global'));
   });
 
-  // JOIN SERVER ROOM
+  socket.on('getServersList', () => {
+    socket.emit('serversList', getActiveServers());
+  });
+
   socket.on('joinRoom', (data) => {
     const player = players[socket.id];
     if (!player) return;
 
     const { roomName, passcode } = data;
 
-    // Verify passcode if private
     if (roomPasscodes[roomName] && roomPasscodes[roomName] !== passcode) {
       return socket.emit('roomError', 'Incorrect server passcode!');
     }
 
-    // Leave old room, join new room
     socket.leave(player.currentRoom);
     const oldRoom = player.currentRoom;
     player.currentRoom = roomName;
     socket.join(roomName);
 
-    // Notify new room and update leaderboards
     socket.emit('roomJoined', { roomName });
     io.to(oldRoom).emit('updateLeaderboard', getRoomLeaderboard(oldRoom));
     io.to(roomName).emit('updateLeaderboard', getRoomLeaderboard(roomName));
+    io.emit('serversList', getActiveServers());
   });
 
-  // CREATE SERVER ROOM
   socket.on('createRoom', (data) => {
     const { roomName, isPrivate, passcode } = data;
+    if (!roomName) return;
+
+    createdRooms.add(roomName);
     if (isPrivate && passcode) {
       roomPasscodes[roomName] = passcode;
     }
-    // Auto join created room
-    socket.emit('roomCreated', { roomName });
+    io.emit('serversList', getActiveServers());
   });
 
-  // CLICK EVENT (BROADCASTS TO ENTIRE ROOM)
   socket.on('click', () => {
     const player = players[socket.id];
     if (!player) return;
@@ -103,34 +116,15 @@ io.on('connection', (socket) => {
 
     const room = player.currentRoom || 'Main Global';
 
-    // Broadcast updated stats & action to everyone in the room
     io.to(room).emit('playerClicked', {
       username: player.username,
       cash: player.cash,
       cpc: cpc
     });
 
-    // Update real-time leaderboard for everyone in the room
     io.to(room).emit('updateLeaderboard', getRoomLeaderboard(room));
   });
 
-  // UPGRADE BUY HANDLER
-  socket.on('buyUpgrade', (data) => {
-    const player = players[socket.id];
-    if (!player) return;
-
-    const { cost, type, value } = data;
-    if (player.cash >= cost) {
-      player.cash -= cost;
-      if (type === 'cpc') player.cpc += value;
-      if (type === 'cps') player.cps += value;
-
-      socket.emit('playerUpdated', player);
-      io.to(player.currentRoom).emit('updateLeaderboard', getRoomLeaderboard(player.currentRoom));
-    }
-  });
-
-  // ADMIN COMMANDS
   socket.on('adminAction', (data) => {
     const { action, payload } = data;
 
@@ -138,7 +132,6 @@ io.on('connection', (socket) => {
       const targetUser = payload.username.toLowerCase();
       bannedUsers.add(targetUser);
 
-      // Disconnect target if online
       for (const [id, p] of Object.entries(players)) {
         if (p.username.toLowerCase() === targetUser) {
           io.to(id).emit('accountBanned', { reason: payload.reason || 'Banned by Administrator.' });
@@ -156,7 +149,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // DISCONNECT HANDLER
   socket.on('disconnect', () => {
     const player = players[socket.id];
     if (player) {
@@ -165,8 +157,8 @@ io.on('connection', (socket) => {
       if (room) {
         io.to(room).emit('updateLeaderboard', getRoomLeaderboard(room));
       }
+      io.emit('serversList', getActiveServers());
     }
-    console.log(`User disconnected: ${socket.id}`);
   });
 });
 
