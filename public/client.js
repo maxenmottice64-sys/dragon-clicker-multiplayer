@@ -36,6 +36,7 @@ socket.on('loginSuccess', (data) => {
   document.getElementById('display-server-header').innerText = currentRoom;
 
   updateUI();
+  socket.emit('getServersList');
 });
 
 socket.on('loginError', (msg) => {
@@ -47,23 +48,37 @@ socket.on('accountBanned', (data) => {
   document.getElementById('banned-modal').classList.remove('hidden');
 });
 
-// DRAGON CLICK ACTION
+// CLICK ACTION FUNCTION
+function triggerClick() {
+  if (!currentUser) return;
+  socket.emit('click');
+}
+
+// DRAGON CLICK ACTION (MOUSE)
 const dragonBtn = document.getElementById('click-area');
 if (dragonBtn) {
-  dragonBtn.addEventListener('click', () => {
-    socket.emit('click');
-  });
+  dragonBtn.addEventListener('click', triggerClick);
 }
+
+// SPACEBAR CLICK HANDLER
+window.addEventListener('keydown', (e) => {
+  // Prevent spacebar clicking if user is typing in an input field
+  const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+  if (activeTag === 'input' || activeTag === 'textarea') return;
+
+  if (e.code === 'Space' || e.key === ' ') {
+    e.preventDefault(); // Stop page scrolling
+    triggerClick();
+  }
+});
 
 // REALTIME MULTIPLAYER CLICK RECEIVER
 socket.on('playerClicked', (data) => {
-  // Update local client's cash display if it's us
   if (data.username === currentUser) {
     myData.cash = data.cash;
     updateUI();
   }
 
-  // Floating text popups for clicks in the room
   spawnFloatingText(`+$${data.cpc}`, data.username === currentUser ? '#4ade80' : '#f59e0b');
 });
 
@@ -82,6 +97,83 @@ socket.on('updateLeaderboard', (leaderboard) => {
     </div>
   `).join('');
 });
+
+// SERVERS LIST DISPLAY
+socket.on('serversList', (servers) => {
+  const serversListContainer = document.getElementById('servers-list');
+  if (!serversListContainer) return;
+
+  if (!servers || servers.length === 0) {
+    serversListContainer.innerHTML = `<p class="text-sm text-purple-300 text-center py-4">No servers active. Create one!</p>`;
+    return;
+  }
+
+  serversListContainer.innerHTML = servers.map(server => `
+    <div class="flex justify-between items-center bg-purple-950/40 p-4 rounded-xl border border-purple-500/20">
+      <div>
+        <div class="font-bold text-white flex items-center space-x-2">
+          <span>${server.name}</span>
+          ${server.isPrivate ? '<i class="fa-solid fa-lock text-amber-400 text-xs"></i>' : ''}
+        </div>
+        <div class="text-xs text-purple-300">${server.playerCount} Players online</div>
+      </div>
+      <button onclick="joinServerRoom('${server.name}', ${server.isPrivate})" class="px-4 py-2 ${server.name === currentRoom ? 'bg-slate-700 text-slate-400' : 'bg-cyan-500 hover:bg-cyan-400 text-slate-950'} font-bold text-xs rounded-xl transition">
+        ${server.name === currentRoom ? 'Connected' : 'Join Server'}
+      </button>
+    </div>
+  `).join('');
+});
+
+function joinServerRoom(roomName, isPrivate) {
+  if (roomName === currentRoom) return;
+  
+  if (isPrivate) {
+    const pass = prompt('Enter Server Passcode:');
+    if (!pass) return;
+    socket.emit('joinRoom', { roomName, passcode: pass });
+  } else {
+    socket.emit('joinRoom', { roomName, passcode: '' });
+  }
+}
+
+socket.on('roomJoined', (data) => {
+  currentRoom = data.roomName;
+  document.getElementById('display-server-header').innerText = currentRoom;
+  socket.emit('getServersList');
+});
+
+function toggleCreateServerForm() {
+  const panel = document.getElementById('create-server-panel');
+  if (panel) panel.classList.toggle('hidden');
+}
+
+function togglePasscodeField(type) {
+  const passInput = document.getElementById('new-server-passcode');
+  if (!passInput) return;
+  if (type === 'private') {
+    passInput.disabled = false;
+    passInput.classList.remove('opacity-50');
+  } else {
+    passInput.disabled = true;
+    passInput.classList.add('opacity-50');
+  }
+}
+
+function createNewServer() {
+  const nameInput = document.getElementById('new-server-name');
+  const typeSelect = document.getElementById('new-server-type');
+  const passInput = document.getElementById('new-server-passcode');
+
+  const roomName = nameInput ? nameInput.value.trim() : '';
+  const isPrivate = typeSelect ? typeSelect.value === 'private' : false;
+  const passcode = passInput ? passInput.value : '';
+
+  if (!roomName) return alert('Enter a server name!');
+
+  socket.emit('createRoom', { roomName, isPrivate, passcode });
+  joinServerRoom(roomName, isPrivate);
+  toggleCreateServerForm();
+}
 
 // FLOATING TEXT ANIMATION
 function spawnFloatingText(text, color) {
@@ -119,6 +211,10 @@ function switchTab(tabName) {
 
   const targetScreen = document.getElementById(`screen-${tabName}`);
   if (targetScreen) targetScreen.classList.remove('hidden');
+
+  if (tabName === 'servers') {
+    socket.emit('getServersList');
+  }
 }
 
 // ADMIN MODAL LOGIC
@@ -132,7 +228,7 @@ function closeAdminModal() {
 
 function verifyAdminPasscode() {
   const pass = document.getElementById('admin-passcode-input').value;
-  if (pass === '6021') { // Default admin passcode
+  if (pass === '6021') {
     document.getElementById('admin-passcode-view').classList.add('hidden');
     document.getElementById('admin-tools-view').classList.remove('hidden');
   } else {
