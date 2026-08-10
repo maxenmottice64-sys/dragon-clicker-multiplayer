@@ -25,7 +25,7 @@ function showLoginError(msg) {
   }
 }
 
-// SOCKET LISTENERS - LOGIN
+// LOGIN LISTENERS
 socket.on('loginSuccess', (data) => {
   currentUser = data.user.username;
   currentRoom = data.currentRoom;
@@ -54,31 +54,32 @@ function triggerClick() {
   socket.emit('click');
 }
 
-// DRAGON CLICK ACTION (MOUSE)
+// DRAGON CLICK LISTENER (MOUSE)
 const dragonBtn = document.getElementById('click-area');
 if (dragonBtn) {
   dragonBtn.addEventListener('click', triggerClick);
 }
 
-// SPACEBAR CLICK HANDLER
+// SPACEBAR CLICK LISTENER
 window.addEventListener('keydown', (e) => {
-  // Prevent spacebar clicking if user is typing in an input field
   const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
   if (activeTag === 'input' || activeTag === 'textarea') return;
 
   if (e.code === 'Space' || e.key === ' ') {
-    e.preventDefault(); // Stop page scrolling
+    e.preventDefault();
     triggerClick();
   }
 });
 
 // REALTIME MULTIPLAYER CLICK RECEIVER
 socket.on('playerClicked', (data) => {
+  // Update local cash counter if this was your click
   if (data.username === currentUser) {
     myData.cash = data.cash;
     updateUI();
   }
 
+  // Floating text popups for all clicks in the room
   spawnFloatingText(`+$${data.cpc}`, data.username === currentUser ? '#4ade80' : '#f59e0b');
 });
 
@@ -98,13 +99,13 @@ socket.on('updateLeaderboard', (leaderboard) => {
   `).join('');
 });
 
-// SERVERS LIST DISPLAY
+// SERVERS LIST RENDERING
 socket.on('serversList', (servers) => {
   const serversListContainer = document.getElementById('servers-list');
   if (!serversListContainer) return;
 
   if (!servers || servers.length === 0) {
-    serversListContainer.innerHTML = `<p class="text-sm text-purple-300 text-center py-4">No servers active. Create one!</p>`;
+    serversListContainer.innerHTML = `<p class="text-sm text-purple-300 text-center py-4">No active servers. Create one!</p>`;
     return;
   }
 
@@ -175,7 +176,7 @@ function createNewServer() {
   toggleCreateServerForm();
 }
 
-// FLOATING TEXT ANIMATION
+// FLOATING ANIMATIONS
 function spawnFloatingText(text, color) {
   const container = document.getElementById('click-area');
   if (!container) return;
@@ -201,7 +202,7 @@ function updateUI() {
   }
 }
 
-// NAVIGATION TABS
+// TABS
 function switchTab(tabName) {
   const screens = ['game', 'servers', 'shop', 'ascension', 'leaderboard'];
   screens.forEach(s => {
@@ -217,7 +218,7 @@ function switchTab(tabName) {
   }
 }
 
-// ADMIN MODAL LOGIC
+// ADMIN MODAL
 function openAdminModal() {
   document.getElementById('admin-modal').classList.remove('hidden');
 }
