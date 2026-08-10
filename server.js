@@ -9,6 +9,12 @@ const io = new Server(server, { cors: { origin: "*" } });
 let users = {};
 let bannedUsers = {}; 
 
+// Rooms state
+// rooms[roomId] = { name: string, isPrivate: bool, passcode: string, members: Set }
+let rooms = {
+  'public_global': { name: 'Main Global Server', isPrivate: false, passcode: '', members: new Set() }
+};
+
 function getSkinBoost(skinLevel) {
   return 1 + (skinLevel * 0.10); 
 }
@@ -34,45 +40,47 @@ function resetAllUserAccounts() {
   }
 }
 
-// Generate Top 10 Leaderboard for a specific Room
-function getLeaderboardData(roomId = 'public') {
-  const roomSockets = Array.from(io.sockets.sockets.values()).filter(s => s.currentRoom === roomId);
-  const roomUsers = roomSockets.map(s => {
-    const key = s.usernameKey;
-    return {
-      username: users[key]?.displayName || key,
-      cash: users[key]?.cash || 0,
-      goldenTickets: users[key]?.goldenTickets || 0
-    };
-  });
+function getLeaderboardData(roomId = 'public_global') {
+  const roomMembers = rooms[roomId] ? Array.from(rooms[roomId].members) : [];
+  const userList = roomMembers.map(usernameKey => ({
+    username: users[usernameKey] ? users[usernameKey].displayName || usernameKey : usernameKey,
+    cash: users[usernameKey] ? users[usernameKey].cash || 0 : 0,
+    goldenTickets: users[usernameKey] ? users[usernameKey].goldenTickets || 0 : 0
+  }));
 
-  roomUsers.sort((a, b) => b.cash - a.cash);
-  return roomUsers.slice(0, 10);
+  userList.sort((a, b) => b.cash - a.cash);
+  return userList.slice(0, 10);
 }
 
-function broadcastLeaderboard(roomId = 'public') {
+function broadcastLeaderboard(roomId) {
+  if (!roomId) return;
   io.to(roomId).emit('updateLeaderboard', getLeaderboardData(roomId));
 }
 
-function getRoomPlayerList(roomId) {
-  const roomSockets = Array.from(io.sockets.sockets.values()).filter(s => s.currentRoom === roomId);
-  return roomSockets.map(s => ({
-    username: users[s.usernameKey]?.displayName || s.usernameKey,
-    activeSkinIcon: users[s.usernameKey]?.activeSkinIcon || '🐉'
-  }));
+function getRoomList() {
+  const list = [];
+  for (let id in rooms) {
+    list.push({
+      id: id,
+      name: rooms[id].name,
+      isPrivate: rooms[id].isPrivate,
+      playerCount: rooms[id].members.size
+    });
+  }
+  return list;
 }
 
-function broadcastRoomPlayers(roomId) {
-  io.to(roomId).emit('roomPlayersUpdate', getRoomPlayerList(roomId));
+function broadcastRoomList() {
+  io.emit('updateRoomList', getRoomList());
 }
 
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
   let currentUsername = null;
-  socket.currentRoom = 'public';
+  let currentRoom = 'public_global';
 
-  // Login or Register
+  // Login handler
   socket.on('userLogin', (data) => {
     const rawUsername = data && data.username ? data.username.trim() : '';
     
@@ -98,39 +106,74 @@ io.on('connection', (socket) => {
 
     currentUsername = usernameKey;
     socket.usernameKey = usernameKey;
-    socket.currentRoom = 'public';
-    socket.join('public');
+
+    // Default join global public room
+    joinRoom(socket, 'public_global');
 
     socket.emit('loginSuccess', {
       username: users[usernameKey].displayName || rawUsername,
       state: users[usernameKey],
-      roomId: 'public'
+      currentRoom: currentRoom
     });
 
-    broadcastLeaderboard('public');
-    broadcastRoomPlayers('public');
+    broadcastRoomList();
   });
 
-  // Switch / Join Server Room (Public or Private)
-  socket.on('joinRoom', (targetRoomId) => {
-    if (!currentUsername) return;
+  // Helper room join function
+  function joinRoom(sock, roomId) {
+    if (currentRoom && rooms[currentRoom]) {
+      rooms[currentRoom].members.delete(currentUsername);
+      sock.leave(currentRoom);
+      broadcastLeaderboard(currentRoom);
+    }
 
-    const oldRoom = socket.currentRoom;
-    socket.leave(oldRoom);
+    currentRoom = roomId;
+    sock.join(roomId);
+    rooms[roomId].members.add(currentUsername);
 
-    const roomCode = targetRoomId ? targetRoomId.trim().toUpperCase() : 'PUBLIC';
-    socket.currentRoom = roomCode;
-    socket.join(roomCode);
+    sock.emit('roomJoined', { roomId: roomId, roomName: rooms[roomId].name });
+    broadcastLeaderboard(roomId);
+    broadcastRoomList();
+  }
 
-    socket.emit('roomJoined', { roomId: roomCode });
+  // Create Server
+  socket.on('createRoom', (data) => {
+    const { name, isPrivate, passcode } = data;
+    if (!name || name.trim().length === 0) return socket.emit('roomError', 'Server name is required!');
 
-    broadcastLeaderboard(oldRoom);
-    broadcastRoomPlayers(oldRoom);
-    broadcastLeaderboard(roomCode);
-    broadcastRoomPlayers(roomCode);
+    const roomId = 'room_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    rooms[roomId] = {
+      name: name.trim(),
+      isPrivate: !!isPrivate,
+      passcode: passcode ? passcode.trim() : '',
+      members: new Set()
+    };
+
+    joinRoom(socket, roomId);
   });
 
-  // Player Click & Broadcast to Room
+  // Join Server
+  socket.on('joinRoom', (data) => {
+    const { roomId, passcode } = data;
+    const targetRoom = rooms[roomId];
+
+    if (!targetRoom) return socket.emit('roomError', 'Server does not exist!');
+
+    if (targetRoom.isPrivate) {
+      if (targetRoom.passcode !== passcode) {
+        return socket.emit('roomError', 'Incorrect server password!');
+      }
+    }
+
+    joinRoom(socket, roomId);
+  });
+
+  // Fetch Rooms
+  socket.on('getRooms', () => {
+    socket.emit('updateRoomList', getRoomList());
+  });
+
+  // Player click
   socket.on('playerClick', () => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -141,19 +184,17 @@ io.on('connection', (socket) => {
     const earned = user.cpc * ticketMultiplier * skinMultiplier;
     user.cash += earned;
 
-    socket.emit('syncState', user);
-    
-    // Broadcast click visual effect to everyone in the same room
-    io.to(socket.currentRoom).emit('remotePlayerClick', {
-      username: user.displayName,
-      earned: earned,
-      skinIcon: user.activeSkinIcon
+    // Broadcast click animation to everyone in the same room
+    io.to(currentRoom).emit('coopClick', {
+      username: user.displayName || currentUsername,
+      amount: earned
     });
 
-    broadcastLeaderboard(socket.currentRoom);
+    socket.emit('syncState', user);
+    broadcastLeaderboard(currentRoom);
   });
 
-  // Buy Upgrade
+  // Buying an upgrade
   socket.on('buyUpgrade', (data) => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -169,11 +210,11 @@ io.on('connection', (socket) => {
         user.cpsUpgradesCount[id] = (user.cpsUpgradesCount[id] || 0) + 1;
       }
       socket.emit('syncState', user);
-      broadcastLeaderboard(socket.currentRoom);
+      broadcastLeaderboard(currentRoom);
     }
   });
 
-  // Equip Skin
+  // Equipping skin
   socket.on('equipSkin', (skinData) => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -182,10 +223,9 @@ io.on('connection', (socket) => {
     user.activeSkinName = skinData.name;
     user.activeSkinLevel = skinData.level || 1;
     socket.emit('syncState', user);
-    broadcastRoomPlayers(socket.currentRoom);
   });
 
-  // Ascension
+  // Ascension execution
   socket.on('performAscension', () => {
     if (!currentUsername || !users[currentUsername]) return;
     const user = users[currentUsername];
@@ -202,15 +242,14 @@ io.on('connection', (socket) => {
       user.cpsUpgradesCount = {};
       
       socket.emit('syncState', user);
-      broadcastLeaderboard(socket.currentRoom);
+      broadcastLeaderboard(currentRoom);
     }
   });
 
-  // Anti-cheat Alert Handler
+  // Anti-cheat alert
   socket.on('cheaterDetected', (data) => {
     if (!currentUsername) return;
     const displayName = users[currentUsername] ? users[currentUsername].displayName : currentUsername;
-    
     io.emit('adminCheaterAlert', {
       username: displayName,
       cps: data.cps || 30
@@ -241,7 +280,7 @@ io.on('connection', (socket) => {
     }
 
     io.emit('serverNotification', `🔨 Player "${data.targetUsername}" has been banned for: ${reason}`);
-    broadcastLeaderboard('public');
+    broadcastLeaderboard(currentRoom);
   });
 
   // Admin modifications
@@ -256,7 +295,7 @@ io.on('connection', (socket) => {
 
     if (mod.resetAllCash) {
       resetAllUserAccounts();
-      io.emit('serverNotification', '🚨 An Admin has completely reset all user stats across all servers!');
+      io.emit('serverNotification', '🚨 An Admin has completely reset all user stats!');
       for (let [id, s] of io.sockets.sockets) {
         if (s.usernameKey && users[s.usernameKey]) {
           s.emit('syncState', users[s.usernameKey]);
@@ -266,12 +305,15 @@ io.on('connection', (socket) => {
       socket.emit('syncState', user);
     }
 
-    broadcastLeaderboard(socket.currentRoom);
+    broadcastLeaderboard(currentRoom);
   });
 
   socket.on('disconnect', () => {
-    broadcastLeaderboard(socket.currentRoom);
-    broadcastRoomPlayers(socket.currentRoom);
+    if (currentUsername && rooms[currentRoom]) {
+      rooms[currentRoom].members.delete(currentUsername);
+      broadcastLeaderboard(currentRoom);
+      broadcastRoomList();
+    }
   });
 });
 
