@@ -23,7 +23,6 @@
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(15, 10, 28, 0.6); }
     ::-webkit-scrollbar-thumb { background: #4c1d95; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #6d28d9; }
 
     @keyframes pulse-glow {
       0%, 100% { filter: drop-shadow(0 0 15px rgba(234, 179, 8, 0.4)); transform: scale(1); }
@@ -58,7 +57,7 @@
       </div>
       <div>
         <h2 class="text-3xl font-black font-cinzel text-amber-300">ACCOUNT LOGIN</h2>
-        <p class="text-xs text-purple-300 mt-1">Enter a unique username to start or resume your game</p>
+        <p class="text-xs text-purple-300 mt-1">Enter a username to start playing</p>
       </div>
       <div class="space-y-3">
         <input type="text" id="username-input" maxlength="16" placeholder="Choose Username..." onkeydown="if(event.key==='Enter') submitLogin()" class="w-full bg-slate-900/90 border border-purple-500/40 rounded-xl px-4 py-3 text-center text-lg font-bold text-white focus:outline-none focus:border-amber-400">
@@ -67,6 +66,17 @@
       <button type="button" onclick="submitLogin()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-purple-600 hover:from-amber-400 hover:to-purple-500 text-slate-950 font-black rounded-xl transition shadow-xl text-base cursor-pointer">
         PLAY NOW
       </button>
+    </div>
+  </div>
+
+  <div id="passcode-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
+    <div class="glass-panel p-6 rounded-3xl border border-purple-500/40 max-w-sm w-full space-y-4 text-center">
+      <h3 class="text-xl font-bold text-amber-300">Enter Server Passcode</h3>
+      <input type="password" id="server-passcode-input" placeholder="Passcode" class="w-full bg-slate-900 border border-purple-500/40 rounded-xl px-4 py-2.5 text-center font-bold text-white focus:outline-none">
+      <div class="flex space-x-2">
+        <button onclick="closePasscodeModal()" class="w-1/2 py-2 bg-slate-800 text-purple-300 font-bold rounded-xl text-xs">Cancel</button>
+        <button onclick="confirmJoinPrivateServer()" class="w-1/2 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs">Join Server</button>
+      </div>
     </div>
   </div>
 
@@ -86,24 +96,6 @@
     </button>
   </div>
 
-  <div id="announcement-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 hidden">
-    <div class="glass-panel p-8 rounded-3xl border-2 border-amber-500/60 max-w-lg w-full text-center space-y-6 shadow-2xl relative">
-      <div class="inline-block p-4 bg-gradient-to-tr from-amber-500 to-red-600 rounded-2xl text-white text-4xl shadow-lg">
-        <i class="fa-solid fa-bullhorn"></i>
-      </div>
-      <div>
-        <h3 class="text-3xl font-black font-cinzel text-amber-300">ADMIN ANNOUNCEMENT</h3>
-        <p class="text-xs text-purple-300 mt-1 uppercase tracking-widest">Broadcast to All Players</p>
-      </div>
-      <div id="announcement-text" class="p-4 bg-purple-950/80 rounded-2xl border border-purple-500/30 text-lg font-bold text-amber-100 max-h-48 overflow-y-auto">
-        Message goes here...
-      </div>
-      <button onclick="closeAnnouncementModal()" class="w-full py-3 bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-extrabold rounded-xl transition shadow-xl">
-        Dismiss Announcement
-      </button>
-    </div>
-  </div>
-
   <div id="anticheat-screen" class="fixed inset-0 bg-red-700/95 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-6 text-center space-y-6 hidden">
     <div class="p-6 bg-black/40 rounded-full border-4 border-white/30 shadow-2xl animate-bounce">
       <i class="fa-solid fa-triangle-exclamation text-7xl text-yellow-300"></i>
@@ -111,9 +103,8 @@
     <div class="space-y-2">
       <h1 class="text-6xl md:text-8xl font-black font-cinzel text-white tracking-widest drop-shadow-lg">DON'T CHEAT!</h1>
       <p class="text-xl md:text-2xl font-bold text-red-100 max-w-lg mx-auto">Autoclicker Detected! (30+ CPS)</p>
-      <p class="text-xs text-amber-200">Admins have been notified and your username has been reported.</p>
     </div>
-    <button onclick="location.reload()" class="px-8 py-4 bg-white text-red-700 hover:bg-red-100 font-extrabold text-lg rounded-2xl shadow-2xl transition transform hover:scale-105">
+    <button onclick="location.reload()" class="px-8 py-4 bg-white text-red-700 hover:bg-red-100 font-extrabold text-lg rounded-2xl shadow-2xl transition">
       Restart Game
     </button>
   </div>
@@ -127,13 +118,19 @@
         <h1 class="text-2xl font-black font-cinzel tracking-wider bg-clip-text text-transparent bg-gradient-to-r from-amber-300 via-orange-400 to-red-500">
           DRAGON CLICKER
         </h1>
-        <p class="text-xs text-purple-300 font-semibold">User: <span id="display-user-header" class="text-amber-300 font-bold">---</span></p>
+        <p class="text-xs text-purple-300 font-semibold">
+          User: <span id="display-user-header" class="text-amber-300 font-bold">---</span> | 
+          Server: <span id="display-server-header" class="text-green-400 font-bold">Main Global</span>
+        </p>
       </div>
     </div>
 
     <nav class="flex space-x-2 bg-purple-950/60 p-1.5 rounded-2xl border border-purple-500/30">
       <button onclick="switchTab('game')" id="tab-game" class="px-4 py-2 rounded-xl text-sm font-bold bg-purple-600 text-white shadow-lg flex items-center space-x-2">
         <i class="fa-solid fa-hand-pointer"></i><span>Clicker</span>
+      </button>
+      <button onclick="switchTab('servers')" id="tab-servers" class="px-4 py-2 rounded-xl text-sm font-bold text-cyan-400 hover:text-cyan-200 hover:bg-cyan-500/20 flex items-center space-x-2">
+        <i class="fa-solid fa-server"></i><span>Servers</span>
       </button>
       <button onclick="switchTab('shop')" id="tab-shop" class="px-4 py-2 rounded-xl text-sm font-bold text-purple-300 hover:text-white hover:bg-purple-800/40 flex items-center space-x-2">
         <i class="fa-solid fa-store"></i><span>Shop</span>
@@ -144,10 +141,10 @@
       <button onclick="switchTab('leaderboard')" id="tab-leaderboard" class="px-4 py-2 rounded-xl text-sm font-bold text-yellow-400 hover:text-yellow-200 hover:bg-yellow-500/20 flex items-center space-x-2">
         <i class="fa-solid fa-trophy"></i><span>Leaderboard</span>
       </button>
-      <button onclick="openAdminModal()" class="px-4 py-2 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/20 flex items-center space-x-1">
-        <i class="fa-solid fa-user-shield"></i><span>Admin</span>
+      <button onclick="openAdminModal()" class="px-3 py-2 rounded-xl text-sm font-bold text-red-400 hover:bg-red-500/20">
+        <i class="fa-solid fa-user-shield"></i>
       </button>
-      <button onclick="logoutAccount()" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white flex items-center space-x-1">
+      <button onclick="logoutAccount()" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-400 hover:text-white">
         <i class="fa-solid fa-right-from-bracket"></i>
       </button>
     </nav>
@@ -180,13 +177,6 @@
           </div>
           <div id="equipped-skin-icon" class="text-3xl">🐉</div>
         </div>
-
-        <div class="bg-purple-950/30 p-4 rounded-2xl border border-purple-500/20 flex items-center justify-between">
-          <div>
-            <div class="text-xs text-purple-300 font-semibold">Golden Tickets (Boost: +<span id="ticket-boost-pct">0</span>%)</div>
-            <div id="game-tickets" class="text-lg font-mono font-black text-yellow-300">🎫 0</div>
-          </div>
-        </div>
       </div>
 
       <div class="md:col-span-7 flex flex-col items-center justify-center relative min-h-[360px]">
@@ -196,40 +186,58 @@
             🐉
           </div>
           <p class="mt-8 text-sm font-semibold text-purple-300/80 bg-purple-950/60 px-4 py-1.5 rounded-full border border-purple-500/20 z-10">
-            Click or Press <kbd class="bg-purple-800 text-white px-2 py-0.5 rounded text-xs font-mono">SPACE</kbd> to Slash!
+            Click together with everyone in this server!
           </p>
         </div>
       </div>
     </section>
 
-    <section id="screen-shop" class="hidden w-full max-w-5xl z-10">
-      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-purple-500/30 shadow-2xl space-y-6">
-        <div class="flex flex-wrap justify-between items-center pb-4 border-b border-purple-500/20 gap-4">
+    <section id="screen-servers" class="hidden w-full max-w-4xl z-10">
+      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-cyan-500/40 shadow-2xl space-y-6">
+        <div class="flex justify-between items-center border-b border-cyan-500/20 pb-4">
           <div>
-            <h2 class="text-3xl font-black font-cinzel text-amber-400">Dragon Bazaar</h2>
-            <p class="text-sm text-purple-300">Upgrade your battle power and automatic gold harvesters (52 Upgrades Each!)</p>
+            <h2 class="text-3xl font-black font-cinzel text-cyan-300">SERVERS BROWSER</h2>
+            <p class="text-xs text-purple-300">Join a Public Server or Create a Private Server with Friends</p>
           </div>
-          <div class="bg-purple-950/80 px-5 py-2.5 rounded-2xl border border-purple-500/30 flex items-center space-x-4">
-            <span class="text-xs text-purple-300">Wallet:</span>
-            <span id="shop-cash" class="text-xl font-mono font-black text-amber-400">$0</span>
-          </div>
+          <button onclick="toggleCreateServerForm()" class="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold text-xs rounded-xl text-white shadow-lg">
+            + Create Server
+          </button>
         </div>
 
+        <div id="create-server-panel" class="hidden p-4 bg-purple-950/60 border border-purple-500/30 rounded-2xl space-y-3">
+          <h3 class="text-sm font-bold text-amber-300">Create New Server</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <input type="text" id="new-server-name" placeholder="Server Name..." class="bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+            <select id="new-server-type" onchange="togglePasscodeField(this.value)" class="bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+              <option value="public">Public Server</option>
+              <option value="private">Private Server (Passcode)</option>
+            </select>
+            <input type="password" id="new-server-passcode" placeholder="Passcode..." disabled class="bg-slate-900 border border-purple-500/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none opacity-50">
+          </div>
+          <button onclick="createNewServer()" class="w-full py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-slate-950 font-black text-xs rounded-xl">
+            Launch Server
+          </button>
+        </div>
+
+        <div id="servers-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+          </div>
+      </div>
+    </section>
+
+    <section id="screen-shop" class="hidden w-full max-w-5xl z-10">
+      <div class="glass-panel p-6 md:p-8 rounded-3xl border border-purple-500/30 shadow-2xl space-y-6">
+        <div class="flex justify-between items-center pb-4 border-b border-purple-500/20">
+          <h2 class="text-3xl font-black font-cinzel text-amber-400">Dragon Bazaar</h2>
+          <span id="shop-cash" class="text-xl font-mono font-black text-amber-400">$0</span>
+        </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div class="space-y-4">
-            <div class="flex items-center space-x-2 text-lg font-bold text-green-400 border-b border-green-500/30 pb-2">
-              <i class="fa-solid fa-hand-fist"></i>
-              <h3>Click Multipliers (52 Upgrades)</h3>
-            </div>
-            <div id="cpc-upgrades-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-2"></div>
+            <h3 class="text-lg font-bold text-green-400">Click Multipliers</h3>
+            <div id="cpc-upgrades-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-2"></div>
           </div>
-
           <div class="space-y-4">
-            <div class="flex items-center space-x-2 text-lg font-bold text-cyan-400 border-b border-cyan-500/30 pb-2">
-              <i class="fa-solid fa-clock"></i>
-              <h3>Passive Income (52 Upgrades)</h3>
-            </div>
-            <div id="cps-upgrades-list" class="space-y-3 max-h-[500px] overflow-y-auto pr-2"></div>
+            <h3 class="text-lg font-bold text-cyan-400">Passive Income</h3>
+            <div id="cps-upgrades-list" class="space-y-3 max-h-[400px] overflow-y-auto pr-2"></div>
           </div>
         </div>
       </div>
@@ -237,167 +245,22 @@
 
     <section id="screen-ascension" class="hidden w-full max-w-5xl z-10">
       <div class="glass-panel p-6 md:p-8 rounded-3xl border border-amber-500/30 shadow-2xl space-y-8">
-        <div class="flex flex-wrap justify-between items-center pb-4 border-b border-amber-500/20 gap-4">
-          <div>
-            <h2 class="text-3xl font-black font-cinzel text-amber-300 flex items-center space-x-3">
-              <i class="fa-solid fa-hat-wizard text-amber-400"></i>
-              <span>Ascension & Dragon Skins</span>
-            </h2>
-            <p class="text-sm text-amber-200/70">Reborn with Golden Tickets to unlock celestial powers and legendary skins (52 Skins!)</p>
-          </div>
-          <div class="bg-amber-950/60 px-5 py-2.5 rounded-2xl border border-amber-500/40 flex items-center space-x-3">
-            <span class="text-xs text-amber-300">Your Tickets:</span>
-            <span id="ascension-tickets" class="text-xl font-mono font-black text-yellow-300">🎫 0</span>
-          </div>
-        </div>
-
-        <div class="bg-gradient-to-r from-amber-950/60 via-purple-950/60 to-amber-950/60 p-6 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div class="space-y-2 text-center md:text-left">
-            <h3 class="text-xl font-bold text-amber-200">Perform Dragon Ascension</h3>
-            <p class="text-sm text-purple-200">
-              Reset your Cash and Shop Upgrades in exchange for <strong class="text-yellow-300">Golden Tickets</strong>.
-              <br><span class="text-xs text-amber-400/80">Each Golden Ticket permanently boosts ALL Cash earnings by +10%!</span>
-            </p>
-            <div class="text-sm font-semibold text-amber-300 pt-1">
-              Gain on Ascension: <span id="pending-tickets" class="font-mono text-lg font-black text-yellow-300">+0 🎫</span>
-            </div>
-          </div>
-          <button onclick="performAscension()" class="px-8 py-4 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-lg rounded-2xl shadow-xl transition transform hover:scale-105 whitespace-nowrap">
-            <i class="fa-solid fa-fire-flame-curved mr-2"></i>ASCEND NOW
-          </button>
-        </div>
-
-        <div class="space-y-4">
-          <h3 class="text-xl font-bold text-amber-300 border-b border-amber-500/20 pb-2">
-            Dragon Skins Gallery (52 Skins with Multiplier Boosts!)
-          </h3>
-          <div id="skins-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[450px] overflow-y-auto pr-2"></div>
-        </div>
+        <h2 class="text-3xl font-black font-cinzel text-amber-300">Ascension & Skins</h2>
+        <div id="skins-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-h-[400px] overflow-y-auto"></div>
       </div>
     </section>
 
     <section id="screen-leaderboard" class="hidden w-full max-w-3xl z-10">
       <div class="glass-panel p-6 md:p-8 rounded-3xl border border-yellow-500/40 shadow-2xl space-y-6">
         <div class="text-center space-y-2 border-b border-yellow-500/20 pb-4">
-          <div class="inline-block p-3 bg-gradient-to-tr from-yellow-500 to-amber-600 rounded-2xl text-slate-950 text-3xl font-black shadow-lg">
-            <i class="fa-solid fa-trophy"></i>
-          </div>
-          <h2 class="text-3xl font-black font-cinzel text-yellow-300">GLOBAL LEADERBOARD</h2>
-          <p class="text-xs text-purple-300">Top 10 Wealthiest Dragons on the Server</p>
+          <h2 class="text-3xl font-black font-cinzel text-yellow-300">SERVER LEADERBOARD</h2>
+          <p class="text-xs text-purple-300">Top Wealthiest Dragons in Current Server</p>
         </div>
-
-        <div id="leaderboard-list" class="space-y-3">
-          </div>
+        <div id="leaderboard-list" class="space-y-3"></div>
       </div>
     </section>
 
   </main>
-
-  <div id="admin-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
-    <div id="admin-passcode-view" class="glass-panel p-8 rounded-3xl border border-red-500/40 max-w-sm w-full space-y-6 text-center relative">
-      <button onclick="closeAdminModal()" class="absolute top-4 right-4 text-purple-400 hover:text-white text-xl"><i class="fa-solid fa-xmark"></i></button>
-      <div class="inline-block p-4 bg-red-950/80 border border-red-500/30 rounded-2xl text-red-400 text-3xl">
-        <i class="fa-solid fa-lock"></i>
-      </div>
-      <div>
-        <h3 class="text-2xl font-black font-cinzel text-red-400">Admin Security</h3>
-        <p class="text-xs text-purple-300 mt-1">Enter passcode to unlock admin cheats</p>
-      </div>
-      <input type="password" id="admin-passcode-input" placeholder="Passcode" maxlength="8" class="w-full bg-slate-900 border border-red-500/40 rounded-xl px-4 py-3 text-center text-2xl tracking-widest font-mono text-white focus:outline-none">
-      <button onclick="verifyAdminPasscode()" class="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition">Unlock Panel</button>
-    </div>
-
-    <div id="admin-tools-view" class="glass-panel p-6 md:p-8 rounded-3xl border border-red-500/50 max-w-3xl w-full max-h-[90vh] overflow-y-auto space-y-6 shadow-2xl hidden relative">
-      <div class="flex justify-between items-center pb-4 border-b border-red-500/30">
-        <div class="flex items-center space-x-3">
-          <div class="p-2 bg-red-600 rounded-xl text-white"><i class="fa-solid fa-user-shield text-xl"></i></div>
-          <div>
-            <h3 class="text-2xl font-black font-cinzel text-red-400">Admin Control Panel</h3>
-            <p class="text-xs text-green-400 font-mono">Status: Authenticated (Passcode 6021)</p>
-          </div>
-        </div>
-        <button onclick="closeAdminModal()" class="text-purple-400 hover:text-white text-2xl"><i class="fa-solid fa-xmark"></i></button>
-      </div>
-
-      <div class="p-4 bg-red-950/50 border border-red-500/50 rounded-2xl space-y-3">
-        <h4 class="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center space-x-2">
-          <i class="fa-solid fa-gavel"></i>
-          <span>Ban Account By Username</span>
-        </h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input type="text" id="admin-ban-username" placeholder="Username to ban..." class="bg-slate-900 border border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none">
-          <input type="text" id="admin-ban-reason" placeholder="Reason for ban..." class="bg-slate-900 border border-red-500/40 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none">
-        </div>
-        <button onclick="adminBanUser()" class="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
-          Execute Ban
-        </button>
-      </div>
-
-      <div class="p-4 bg-amber-950/40 border border-amber-500/40 rounded-2xl space-y-3">
-        <h4 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center space-x-2">
-          <i class="fa-solid fa-bullhorn"></i>
-          <span>Send Global Announcement</span>
-        </h4>
-        <p class="text-xs text-purple-300">Type a message to pop up on every connected player's screen in real time.</p>
-        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-          <input type="text" id="admin-announcement-input" placeholder="Type announcement here..." class="w-full bg-slate-900 border border-amber-500/30 rounded-xl px-4 py-2.5 text-xs text-amber-200 focus:outline-none">
-          <button onclick="adminSendAnnouncement()" class="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-red-600 hover:from-amber-400 hover:to-red-500 text-white font-bold text-xs rounded-xl shadow-lg whitespace-nowrap transition">
-            Broadcast Message
-          </button>
-        </div>
-      </div>
-
-      <div class="p-4 bg-red-950/40 border border-red-500/40 rounded-2xl space-y-2">
-        <h4 class="text-sm font-bold text-red-400 uppercase tracking-wider flex items-center space-x-2">
-          <i class="fa-solid fa-rotate-left"></i>
-          <span>Global Economy Reset</span>
-        </h4>
-        <p class="text-xs text-purple-300">Wipe all user cash, upgrades, tickets, and skins across all accounts.</p>
-        <button onclick="adminResetAllCash()" class="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl shadow-lg transition">
-          Reset All User Accounts to Default
-        </button>
-      </div>
-
-      <div class="space-y-4">
-        <h4 class="text-sm font-bold text-purple-200 uppercase tracking-wider">Quick Preset Generators</h4>
-        
-        <div class="space-y-2">
-          <span class="text-xs text-amber-400 font-semibold">Add Gold Cash:</span>
-          <div class="grid grid-cols-3 gap-2">
-            <button onclick="adminAddCash(100000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+100,000</button>
-            <button onclick="adminAddCash(1000000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+1,000,000</button>
-            <button onclick="adminAddCash(10000000000)" class="py-2 bg-amber-950/60 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl">+10 Billion</button>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <span class="text-xs text-cyan-400 font-semibold">Add Passive Income (CPS):</span>
-          <div class="grid grid-cols-3 gap-2">
-            <button onclick="adminAddCPS(100000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+100,000 CPS</button>
-            <button onclick="adminAddCPS(1000000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+1,000,000 CPS</button>
-            <button onclick="adminAddCPS(10000000000)" class="py-2 bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-xs font-bold rounded-xl">+10 Billion CPS</button>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <span class="text-xs text-green-400 font-semibold">Add Click Power (CPC):</span>
-          <div class="grid grid-cols-3 gap-2">
-            <button onclick="adminAddCPC(100000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+100,000 CPC</button>
-            <button onclick="adminAddCPC(1000000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+1,000,000 CPC</button>
-            <button onclick="adminAddCPC(10000000000)" class="py-2 bg-green-950/60 border border-green-500/30 text-green-300 text-xs font-bold rounded-xl">+10 Billion CPC</button>
-          </div>
-        </div>
-
-        <div class="space-y-2">
-          <span class="text-xs text-yellow-400 font-semibold">Add Golden Tickets:</span>
-          <div class="grid grid-cols-2 gap-2">
-            <button onclick="adminAddTickets(1000)" class="py-2 bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 text-xs font-bold rounded-xl">+1,000 Tickets 🎫</button>
-            <button onclick="adminAddTickets(50000)" class="py-2 bg-yellow-950/60 border border-yellow-500/30 text-yellow-300 text-xs font-bold rounded-xl">+50,000 Tickets 🎫</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="client.js"></script>
